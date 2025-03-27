@@ -2,7 +2,7 @@ import argparse
 import copy
 
 import torch
-from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
+from diffusers.schedulers.scheduling_ddim import DDIMScheduler
 from tqdm import tqdm
 
 from diffusion_policy.common.pytorch_util import dict_apply, optimizer_to
@@ -108,11 +108,11 @@ class TrainDiffusionPolicy(TrainBase):
             "horizon": self.args.horizon,
             "n_action_steps": self.args.n_action_steps,
             "n_obs_steps": self.args.n_obs_steps,
-            "num_inference_steps": 100,
+            "num_inference_steps": 8,
             "obs_as_global_cond": True,
             "crop_shape": None,
             "diffusion_step_embed_dim": 128,
-            "down_dims": [512, 1024, 2048],
+            "down_dims": [256, 512, 1024],
             "kernel_size": 5,
             "n_groups": 8,
             "cond_predict_scale": True,
@@ -120,17 +120,18 @@ class TrainDiffusionPolicy(TrainBase):
             "eval_fixed_crop": True,
         }
         self.model_meta_info["policy"]["noise_scheduler_args"] = {
+            "num_train_timesteps": 100,
+            "beta_start": 0.0001,
             "beta_end": 0.02,
             "beta_schedule": "squaredcos_cap_v2",
-            "beta_start": 0.0001,
             "clip_sample": True,
-            "num_train_timesteps": 100,
+            "set_alpha_to_one": True,
+            "steps_offset": 0,
             "prediction_type": "epsilon",
-            "variance_type": "fixed_small",
         }
 
         # Construct policy
-        noise_scheduler = DDPMScheduler(
+        noise_scheduler = DDIMScheduler(
             **self.model_meta_info["policy"]["noise_scheduler_args"]
         )
         self.policy = DiffusionUnetHybridImagePolicy(
@@ -172,6 +173,7 @@ class TrainDiffusionPolicy(TrainBase):
         optimizer_to(self.optimizer, "cuda")
 
         # Print policy information
+        print("!!!! eval-dp-ddim branch !!!")
         self.print_policy_info()
         print(f"  - use ema: {self.args.use_ema}")
         print(

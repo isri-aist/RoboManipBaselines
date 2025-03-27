@@ -2,7 +2,7 @@ import cv2
 import matplotlib.pylab as plt
 import numpy as np
 import torch
-from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
+from diffusers.schedulers.scheduling_ddim import DDIMScheduler
 
 from diffusion_policy.policy.diffusion_unet_hybrid_image_policy import (
     DiffusionUnetHybridImagePolicy,
@@ -26,7 +26,7 @@ class RolloutDiffusionPolicy(RolloutBase):
         print(f"  - image size list: {self.model_meta_info['data']['image_size_list']}")
 
         # Construct policy
-        noise_scheduler = DDPMScheduler(
+        noise_scheduler = DDIMScheduler(
             **self.model_meta_info["policy"]["noise_scheduler_args"]
         )
         self.policy = DiffusionUnetHybridImagePolicy(
