@@ -70,6 +70,7 @@ class ArmManager(BodyManagerBase):
             )
         self.pin_data = self.pin_model.createData()
 
+        self.arm_joint_pos = None
         self.reset(init=True)
 
     def reset(self, init=False):
