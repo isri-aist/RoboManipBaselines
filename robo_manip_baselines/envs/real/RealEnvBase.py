@@ -142,7 +142,7 @@ class RealEnvBase(EnvDataMixin, gym.Env, ABC):
             arm_joint_pos_error_max = np.max(
                 np.abs(arm_joint_pos_command - self.arm_joint_pos_actual)
             )
-            arm_joint_pos_error_thre = np.deg2rad(90)
+            arm_joint_pos_error_thre = np.deg2rad(20)
             duration_thre = 0.1  # [s]
             if (
                 arm_joint_pos_error_max > arm_joint_pos_error_thre

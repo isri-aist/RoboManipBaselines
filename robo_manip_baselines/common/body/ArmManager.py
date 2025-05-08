@@ -73,8 +73,17 @@ class ArmManager(BodyManagerBase):
         self.reset(init=True)
 
     def reset(self, init=False):
+        print("ArmManager.reset() is called.")
+        print(f"  - [before] self.arm_joint_pos: {self.arm_joint_pos}")
+        print(
+            f"  - [before] self.body_config.init_arm_joint_pos: {self.body_config.init_arm_joint_pos}"
+        )
         self.arm_joint_pos = self.body_config.init_arm_joint_pos.copy()
         self.gripper_joint_pos = self.body_config.init_gripper_joint_pos.copy()
+        print(f"  - [after] self.arm_joint_pos: {self.arm_joint_pos}")
+        print(
+            f"  - [after] self.body_config.init_arm_joint_pos: {self.body_config.init_arm_joint_pos}"
+        )
 
         self.forward_kinematics()
 
