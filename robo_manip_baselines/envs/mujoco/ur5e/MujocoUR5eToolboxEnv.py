@@ -30,20 +30,20 @@ class MujocoUR5eToolboxEnv(MujocoUR5eEnvBase):
             **kwargs,
         )
 
-        # self.original_toolbox_pos = self.model.body("toolbox").pos.copy()
-        # self.toolbox_pos_offsets = np.array(
-        #     [
-        #         [0.0, -0.06, 0.0],
-        #         [0.0, -0.03, 0.0],
-        #         [0.0, 0.0, 0.0],
-        #         [0.0, 0.03, 0.0],
-        #         [0.0, 0.06, 0.0],
-        #         [0.0, 0.09, 0.0],
-        #     ]
-        # )  # [m]
+        self.original_toolbox_pos = self.model.body("toolbox").pos.copy()
+        self.toolbox_pos_offsets = np.array(
+            [
+                [0.0, -0.06, 0.0],
+                [0.0, -0.03, 0.0],
+                [0.0, 0.0, 0.0],
+                [0.0, 0.03, 0.0],
+                [0.0, 0.06, 0.0],
+                [0.0, 0.09, 0.0],
+            ]
+        )  # [m]
 
     def modify_world(self, world_idx=None, cumulative_idx=None):
-        # if world_idx is None:
-        #     world_idx = cumulative_idx % len(self.toolbox_pos_offsets)
+        if world_idx is None:
+            world_idx = cumulative_idx % len(self.toolbox_pos_offsets)
 
         return world_idx
