@@ -9,7 +9,7 @@ from robo_manip_baselines.common import (
 
 
 def get_target_se3(op, pos_z, rot_y):
-    left_target_pos = op.env.unwrapped.get_body_pose("B0")[0:3]
+    left_target_pos = op.env.unwrapped.get_body_pose("cable_B0")[0:3]
     left_target_pos[1] += 0.05  # [m]
     left_target_pos[2] = pos_z
     left_target_pose = get_pose_from_se3(

@@ -36,12 +36,12 @@
   </worldbody>
 
   <equality>
-    <weld name="cable_end" body1="B24" body2="cable_end" relpose="0 0 0 1 0 0 0"/>
+    <weld name="cable_end" body1="cable_B24" body2="cable_end" relpose="0 0 0 1 0 0 0"/>
   </equality>
 
   <contact>
-    <exclude body1="B0" body2="B1"/>
-    <exclude body1="B23" body2="cable_end"/>
-    <exclude body1="B24" body2="cable_end"/>
+    <exclude body1="cable_B0" body2="cable_B1"/>
+    <exclude body1="cable_B23" body2="cable_end"/>
+    <exclude body1="cable_B24" body2="cable_end"/>
   </contact>
 </mujoco>
