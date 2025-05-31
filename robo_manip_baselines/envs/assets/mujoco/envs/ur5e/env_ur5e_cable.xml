@@ -1,5 +1,5 @@
 <mujoco model="ur5e_cable">
-  <compiler meshdir="../../assets/meshes" texturedir="../../assets/textures"/>
+  <include file="./env_ur5e_common.xml"/>
 
   <asset>
     <texture name="cable" file="general/rubber1.png" type="cube"/>
@@ -7,10 +7,8 @@
     <texture name="cable_box" file="general/rubber1.png" type="cube"/>
     <material name="cable_box" texture="cable_box" rgba="1 1 0.2 1" specular="0.2" shininess="0.3"/>
     <texture name="pole" file="general/metal2.png" type="cube"/>
-    <material name="pole" texture="pole" rgba="0.8 0 0 1" specular="1.0" shininess="100.0"/>
+    <material name="pole" texture="pole" rgba="0.8 0 0 1" specular="1.0" shininess="1.0"/>
   </asset>
-
-  <include file="./env_ur5e_common.xml"/>
 
   <include file="../../robots/ur5e/ur5e_integrated_shared_config.xml"/>
   <include file="../../robots/ur5e/ur5e_integrated_specific_config.xml"/>

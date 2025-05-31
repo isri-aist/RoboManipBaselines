@@ -1,18 +1,16 @@
 <mujoco model="ur5e_ring">
-  <compiler meshdir="../../assets/meshes" texturedir="../../assets/textures"/>
+  <include file="./env_ur5e_common.xml"/>
+
+  <size memory="1G"/>
 
   <asset>
     <texture name="ring" file="general/metal2.png" type="cube"/>
-    <material name="ring" texture="ring" rgba="0.5 0.5 1 1" specular="1.0" shininess="100.0"/>
+    <material name="ring" texture="ring" rgba="0.5 0.5 1 1" specular="1.0" shininess="1.0"/>
     <texture name="fook" file="general/wood1.png" type="cube"/>
     <material name="fook" texture="fook" rgba="1 0.2 0.2 1" specular="0.2" shininess="0.3"/>
     <texture name="pole" file="general/wood1.png" type="cube"/>
     <material name="pole" texture="pole" rgba="1 1 0 1" specular="0.2" shininess="0.3"/>
   </asset>
-
-  <include file="./env_ur5e_common.xml"/>
-
-  <size memory="1G"/>
 
   <include file="../../robots/ur5e/ur5e_integrated_shared_config.xml"/>
   <include file="../../robots/ur5e/ur5e_integrated_specific_config.xml"/>

@@ -19,8 +19,8 @@
     <texture name="table_plate" file="table/table3.png" type="cube"/>
     <material name="table_plate" texture="table_plate" specular="0.0" shininess="0.0"/>
     <texture name="table_base" file="general/metal1.png" type="cube"/>
-    <material name="table_base" texture="table_base" rgba="1.0 0.93 0.7 1" specular="0.5" shininess="5.0"/>
+    <material name="table_base" texture="table_base" rgba="1.0 0.93 0.7 1" specular="0.5" shininess="1.0"/>
     <texture name="stand" file="general/metal1.png" type="cube"/>
-    <material name="stand" texture="stand" rgba="0.05 0.22 0.48 1" specular="0.5" shininess="5.0"/>
+    <material name="stand" texture="stand" rgba="0.05 0.22 0.48 1" specular="0.5" shininess="1.0"/>
   </asset>
 </mujoco>

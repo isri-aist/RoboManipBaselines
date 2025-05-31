@@ -1,5 +1,5 @@
 <mujoco model="aloha_cable">
-  <compiler meshdir="../../assets/meshes" texturedir="../../assets/textures"/>
+  <include file="./env_aloha_common.xml"/>
 
   <asset>
     <texture name="cable" file="general/rubber1.png" type="cube"/>
@@ -7,8 +7,6 @@
     <texture name="cable_box" file="general/rubber1.png" type="cube"/>
     <material name="cable_box" texture="cable_box" rgba="1 1 0.2 1" specular="0.2" shininess="0.3"/>
   </asset>
-
-  <include file="./env_aloha_common.xml"/>
 
   <include file="../../robots/aloha/aloha_arms_config.xml"/>
 

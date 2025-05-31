@@ -1,6 +1,6 @@
 <!-- TODO: In this environment, the xArm gripper cannot grasp the cable stably. This may be improved by tuning the parameters of the simulation. -->
 <mujoco model="xarm7_cable">
-  <compiler meshdir="../../assets/meshes" texturedir="../../assets/textures"/>
+  <include file="./env_xarm7_common.xml"/>
 
   <asset>
     <texture name="cable" file="general/rubber1.png" type="cube"/>
@@ -8,8 +8,6 @@
     <texture name="cable_box" file="general/rubber1.png" type="cube"/>
     <material name="cable_box" texture="cable_box" rgba="1 1 0.2 1" specular="0.2" shininess="0.3"/>
   </asset>
-
-  <include file="./env_xarm7_common.xml"/>
 
   <include file="../../robots/xarm7/xarm7_config.xml"/>
 
