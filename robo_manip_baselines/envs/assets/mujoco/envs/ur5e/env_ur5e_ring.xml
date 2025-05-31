@@ -1,4 +1,15 @@
 <mujoco model="ur5e_ring">
+  <compiler meshdir="../../assets/meshes" texturedir="../../assets/textures"/>
+
+  <asset>
+    <texture name="ring" file="general/metal2.png" type="2d"/>
+    <material name="ring" texture="ring" specular="1.0" shininess="30.0"/>
+    <texture name="fook" file="general/wood1.png" type="2d"/>
+    <material name="fook" texture="fook" rgba="1 0.2 0.2 1" specular="0.2" shininess="0.3"/>
+    <texture name="pole" file="general/wood1.png" type="2d"/>
+    <material name="pole" texture="pole" rgba="1.0 1.0 0.0 1" specular="0.2" shininess="0.3"/>
+  </asset>
+
   <include file="./env_ur5e_common.xml"/>
 
   <size memory="1G"/>
@@ -13,6 +24,11 @@
     <camera name="side" mode="fixed" pos="-0.1 -0.75 0.9" euler="1.5708 0.0 0.0"/>
 
     <geom name="floor" size="0 0 0.05" type="plane" material="floor"/>
+
+    <geom name="wall1" type="box" size="10 10 0.01" pos="10 0 10" zaxis="1 0 0" material="wall"/>
+    <geom name="wall2" type="box" size="10 10 0.01" pos="-10 0 10" zaxis="1 0 0" material="wall"/>
+    <geom name="wall3" type="box" size="10 10 0.01" pos="0 10 10" zaxis="0 1 0" material="wall"/>
+    <geom name="wall4" type="box" size="10 10 0.01" pos="0 -10 10" zaxis="0 1 0" material="wall"/>
 
     <body name="table">
       <geom type="box" size="0.275 0.5 0.4" pos="0 0 0.4" material="table_base"/>
@@ -32,20 +48,20 @@
       <body name="ring_B0" pos="0.1 -0.15 0.15" euler="0 -1.5708 -1.5708">
         <composite prefix="ring_" type="loop" count="11" spacing="0.04">
           <joint kind="main" damping="0.005"/>
-          <geom type="capsule" size="0.01 0.012" rgba="0.8 0.8 0.2 1"/>
+          <geom type="capsule" size="0.01 0.012" material="ring"/>
         </composite>
       </body>
     </body>
 
     <body name="fooks" pos="0.0 0.0 0.795">
       <geom name="fook1" type="cylinder" size="0.01 0.02"
-            pos="0.1 -0.13 0.25" euler="0 1.5708 0" rgba="0.8 0.1 0.5 1.0"/>
+            pos="0.1 -0.13 0.25" euler="0 1.5708 0" material="fook"/>
       <geom name="fook2" type="cylinder" size="0.01 0.02"
-            pos="0.1 -0.17 0.25" euler="0 1.5708 0" rgba="0.8 0.1 0.5 1.0"/>
+            pos="0.1 -0.17 0.25" euler="0 1.5708 0" material="fook"/>
     </body>
 
     <body name="pole" pos="0.0 0.0 0.795">
-      <geom type="cylinder" size="0.01 0.03" pos="0.0 0.0 0.05" rgba="0.1 0.5 0.8 1.0"/>
+      <geom type="cylinder" size="0.01 0.03" pos="0.0 0.0 0.05" material="pole"/>
     </body>
   </worldbody>
 </mujoco>
