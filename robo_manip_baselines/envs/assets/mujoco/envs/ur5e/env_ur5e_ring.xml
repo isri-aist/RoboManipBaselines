@@ -7,7 +7,7 @@
     <texture name="fook" file="general/wood1.png" type="cube"/>
     <material name="fook" texture="fook" rgba="1 0.2 0.2 1" specular="0.2" shininess="0.3"/>
     <texture name="pole" file="general/wood1.png" type="cube"/>
-    <material name="pole" texture="pole" rgba="1.0 1.0 0.0 1" specular="0.2" shininess="0.3"/>
+    <material name="pole" texture="pole" rgba="1 1 0 1" specular="0.2" shininess="0.3"/>
   </asset>
 
   <include file="./env_ur5e_common.xml"/>

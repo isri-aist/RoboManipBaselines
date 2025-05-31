@@ -1,8 +1,4 @@
 <mujoco model="xarm7_ring">
-  <asset>
-    <material name="table" rgba="0.31 0.55 0.30 1.0"/>
-  </asset>
-
   <include file="./env_xarm7_common.xml"/>
 
   <include file="../../robots/xarm7/xarm7_config.xml"/>
