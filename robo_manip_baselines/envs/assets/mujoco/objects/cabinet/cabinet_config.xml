@@ -1,0 +1,11 @@
+<mujoco model="cabinet_config">
+  <asset>
+    <texture name="cabinet" file="general/wood2.png" type="cube"/>
+    <material name="cabinet_base" texture="cabinet" rgba="0.5 0.5 0.5 1.0" specular="0.2" shininess="0.3"/>
+    <material name="cabinet_lower" texture="cabinet" rgba="0.9 0.6 0.1 1.0" specular="0.2" shininess="0.3"/>
+    <material name="cabinet_upper" texture="cabinet" rgba="0.1 0.6 0.8 1.0" specular="0.2" shininess="0.3"/>
+    <material name="cabinet_slide1" texture="cabinet" rgba="0.9 0.3 0.7 1.0" specular="0.2" shininess="0.3"/>
+    <material name="cabinet_slide2" texture="cabinet" rgba="0.6 0.0 0.4 1.0" specular="0.2" shininess="0.3"/>
+    <material name="cabinet_hinge" texture="cabinet" rgba="0.7 0.8 0.1 1.0" specular="0.2" shininess="0.3"/>
+  </asset>
+</mujoco>

@@ -5,7 +5,9 @@
 
   <asset>
     <texture name="cloth" type="2d" file="cloth/cloth1.png"/>
-    <material name="cloth" texture="cloth"/>
+    <material name="cloth" texture="cloth" specular="0.5" shininess="0.5"/>
+    <texture name="board" type="cube" file="general/plastic1.png"/>
+    <material name="board" texture="board" rgba="0.8 0.8 0.2 0.4" specular="0.5" shininess="1.0"/>
   </asset>
 
   <include file="../../robots/ur5e/ur5e_integrated_shared_config.xml"/>
@@ -18,6 +20,11 @@
     <camera name="side" mode="fixed" pos="-0.1 -0.75 0.9" euler="1.5708 0.0 0.0"/>
 
     <geom name="floor" size="0 0 0.05" type="plane" material="floor"/>
+
+    <geom name="wall1" type="box" size="10 10 0.01" pos="10 0 10" zaxis="1 0 0" material="wall"/>
+    <geom name="wall2" type="box" size="10 10 0.01" pos="-10 0 10" zaxis="1 0 0" material="wall"/>
+    <geom name="wall3" type="box" size="10 10 0.01" pos="0 10 10" zaxis="0 1 0" material="wall"/>
+    <geom name="wall4" type="box" size="10 10 0.01" pos="0 -10 10" zaxis="0 1 0" material="wall"/>
 
     <body name="table">
       <geom type="box" size="0.275 0.5 0.4" pos="0 0 0.4" material="table_base"/>
@@ -41,7 +48,7 @@
     </body>
 
     <body name="board" pos="0.15 -0.065 1.2" euler="0.0 0.0 -0.785398">
-      <geom name="board" type="box" size="0.06 0.18 0.008" rgba="0.8 0.8 0.2 0.4"/>
+      <geom name="board" type="box" size="0.06 0.18 0.008" material="board"/>
     </body>
   </worldbody>
 

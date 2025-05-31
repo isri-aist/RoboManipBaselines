@@ -1,0 +1,8 @@
+<mujoco model="cable_config">
+  <asset>
+    <texture name="cable" file="general/rubber1.png" type="cube"/>
+    <material name="cable" texture="cable" rgba="0.9 0.9 0.9 1" specular="0.2" shininess="0.3"/>
+    <texture name="cable_box" file="general/rubber1.png" type="cube"/>
+    <material name="cable_box" texture="cable_box" rgba="1 1 0.2 1" specular="0.2" shininess="0.3"/>
+  </asset>
+</mujoco>

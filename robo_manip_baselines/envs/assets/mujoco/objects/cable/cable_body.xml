@@ -1,4 +1,4 @@
-<mujoco model="cable">
+<mujoco model="cable_body">
   <body name="cable_B0">
     <geom size="0.02 0.015 0.015" type="box" material="cable_box"/>
     <geom name="cable_G0" size="0.01 0.0075" quat="0.707107 0 0.707107 0" type="capsule" material="cable"/>

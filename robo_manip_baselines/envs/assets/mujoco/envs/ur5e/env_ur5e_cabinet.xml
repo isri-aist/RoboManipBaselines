@@ -4,10 +4,7 @@
   <include file="../../robots/ur5e/ur5e_integrated_shared_config.xml"/>
   <include file="../../robots/ur5e/ur5e_integrated_specific_config.xml"/>
 
-  <asset>
-    <texture name="table_plate2" file="table/table2.png" type="2d"/>
-    <material name="table_plate2" texture="table_plate2" specular="0.0" shininess="0.0"/>
-  </asset>
+  <include file="../../objects/cabinet/cabinet_config.xml"/>
 
   <worldbody>
     <light pos="0 0 1.5" dir="0 0 -1" directional="true" diffuse="0.5 0.5 0.5" castshadow="false"/>
@@ -17,9 +14,14 @@
 
     <geom name="floor" size="0 0 0.05" type="plane" material="floor"/>
 
+    <geom name="wall1" type="box" size="10 10 0.01" pos="10 0 10" zaxis="1 0 0" material="wall"/>
+    <geom name="wall2" type="box" size="10 10 0.01" pos="-10 0 10" zaxis="1 0 0" material="wall"/>
+    <geom name="wall3" type="box" size="10 10 0.01" pos="0 10 10" zaxis="0 1 0" material="wall"/>
+    <geom name="wall4" type="box" size="10 10 0.01" pos="0 -10 10" zaxis="0 1 0" material="wall"/>
+
     <body name="table">
       <geom type="box" size="0.275 0.5 0.4" pos="0 0 0.4" material="table_base"/>
-      <geom type="box" size="0.275 0.5 0.0075" pos="0 0 0.8075" material="table_plate2"/>
+      <geom type="box" size="0.275 0.5 0.0075" pos="0 0 0.8075" material="table_plate"/>
     </body>
 
     <body name="stand">
@@ -31,7 +33,7 @@
     </body>
 
     <body name="cabinet" pos="0.12 -0.05 0.815">
-      <include file="../../objects/cabinet.xml"/>
+      <include file="../../objects/cabinet/cabinet_body.xml"/>
     </body>
   </worldbody>
 </mujoco>

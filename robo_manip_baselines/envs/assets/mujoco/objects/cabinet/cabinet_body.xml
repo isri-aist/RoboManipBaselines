@@ -1,0 +1,27 @@
+<mujoco model="cabinet_body">
+  <body pos="0.0 0.0 0.0">
+    <geom type="box" size="0.1 0.15 0.005" pos="0.0 0.0 0.005" material="cabinet_base"/>
+    <geom type="box" size="0.1 0.005 0.08" pos="0.0 0.155 0.08" material="cabinet_base"/>
+    <geom type="box" size="0.1 0.005 0.08" pos="0.0 -0.155 0.08" material="cabinet_base"/>
+    <geom type="box" size="0.005 0.15 0.08" pos="0.095 0.0 0.08" material="cabinet_base"/>
+    <geom type="box" size="0.005 0.075 0.075" pos="-0.085 0.075 0.085" material="cabinet_lower"/>
+    <body pos="-0.095 0.0 0.0">
+      <joint name="slide" type="slide" axis="0 1 0" range="0.0 0.15" armature="1e-5"/>
+      <geom type="box" size="0.005 0.075 0.075" pos="0.0 -0.075 0.085" material="cabinet_slide1"/>
+      <geom type="box" size="0.01 0.003 0.03" pos="-0.01 -0.135 0.085" material="cabinet_slide2"/>
+    </body>
+  </body>
+  <body pos="0.0 0.0 0.16">
+    <geom type="box" size="0.095 0.15 0.005" pos="0.0 0.0 0.005" material="cabinet_base"/>
+    <geom type="box" size="0.1 0.005 0.06" pos="0.0 0.155 0.06" material="cabinet_base"/>
+    <geom type="box" size="0.1 0.005 0.06" pos="0.0 -0.155 0.06" material="cabinet_base"/>
+    <geom type="box" size="0.005 0.15 0.06" pos="0.095 0.0 0.06" material="cabinet_base"/>
+    <geom type="box" size="0.005 0.15 0.04" pos="-0.095 0.0 0.04" material="cabinet_upper"/>
+    <geom type="box" size="0.005 0.05 0.02" pos="-0.095 0.1 0.10" material="cabinet_upper"/>
+    <geom type="box" size="0.005 0.05 0.02" pos="-0.095 -0.1 0.10" material="cabinet_upper"/>
+    <body pos="0.095 0.0 0.12">
+      <joint name="hinge" axis="0 1 0" range="0.0 3.1415"/>
+      <geom type="box" size="0.1 0.16 0.005" pos="-0.095 0.0 0.005" material="cabinet_hinge"/>
+    </body>
+  </body>
+</mujoco>

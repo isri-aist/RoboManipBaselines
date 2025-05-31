@@ -2,16 +2,14 @@
   <include file="./env_ur5e_common.xml"/>
 
   <asset>
-    <texture name="cable" file="general/rubber1.png" type="cube"/>
-    <material name="cable" texture="cable" rgba="0.9 0.9 0.9 1" specular="0.2" shininess="0.3"/>
-    <texture name="cable_box" file="general/rubber1.png" type="cube"/>
-    <material name="cable_box" texture="cable_box" rgba="1 1 0.2 1" specular="0.2" shininess="0.3"/>
     <texture name="pole" file="general/metal2.png" type="cube"/>
     <material name="pole" texture="pole" rgba="0.8 0 0 1" specular="1.0" shininess="1.0"/>
   </asset>
 
   <include file="../../robots/ur5e/ur5e_integrated_shared_config.xml"/>
   <include file="../../robots/ur5e/ur5e_integrated_specific_config.xml"/>
+
+  <include file="../../objects/cable/cable_config.xml"/>
 
   <worldbody>
     <light pos="0 0 1.5" dir="0 0 -1" directional="true" diffuse="0.5 0.5 0.5"/>
@@ -40,7 +38,7 @@
     </body>
 
     <body name="cable" pos="-0.175 0.2 0.8325" quat="0.707105 0 0 -0.707108">
-      <include file="../../objects/cable.xml"/>
+      <include file="../../objects/cable/cable_body.xml"/>
     </body>
 
     <body name="cable_end" pos="-0.175 -0.28 0.8325" euler="0 0 -1.5708">

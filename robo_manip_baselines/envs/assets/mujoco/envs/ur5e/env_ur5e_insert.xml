@@ -5,8 +5,11 @@
   <include file="../../robots/ur5e/ur5e_integrated_specific_config.xml"/>
 
   <asset>
-    <texture name="table_plate2" file="table/table2.png" type="2d"/>
-    <material name="table_plate2" texture="table_plate2" specular="0.0" shininess="0.0"/>
+    <texture name="peg" file="general/metal2.png" type="cube"/>
+    <material name="peg1" texture="peg" rgba="1.0 0.1 0.8 1.0" specular="1.0" shininess="1.0"/>
+    <material name="peg2" texture="peg" rgba="0.5 0.5 0.8 1.0" specular="1.0" shininess="1.0"/>
+    <texture name="hole" file="general/metal2.png" type="cube"/>
+    <material name="hole" texture="hole" rgba="0.8 0.8 0.1 1.0" specular="1.0" shininess="1.0"/>
   </asset>
 
   <worldbody>
@@ -17,9 +20,14 @@
 
     <geom name="floor" size="0 0 0.05" type="plane" material="floor"/>
 
+    <geom name="wall1" type="box" size="10 10 0.01" pos="10 0 10" zaxis="1 0 0" material="wall"/>
+    <geom name="wall2" type="box" size="10 10 0.01" pos="-10 0 10" zaxis="1 0 0" material="wall"/>
+    <geom name="wall3" type="box" size="10 10 0.01" pos="0 10 10" zaxis="0 1 0" material="wall"/>
+    <geom name="wall4" type="box" size="10 10 0.01" pos="0 -10 10" zaxis="0 1 0" material="wall"/>
+
     <body name="table">
       <geom type="box" size="0.275 0.5 0.4" pos="0 0 0.4" material="table_base"/>
-      <geom type="box" size="0.275 0.5 0.0075" pos="0 0 0.8075" material="table_plate2"/>
+      <geom type="box" size="0.275 0.5 0.0075" pos="0 0 0.8075" material="table_plate"/>
     </body>
 
     <body name="stand">
@@ -32,16 +40,16 @@
 
     <body name="peg" pos="-0.12 -0.13 1.05" euler="-3.1415 0.0 3.1415">
       <freejoint/>
-      <geom type="box" size="0.015 0.015 0.02" pos="0.0 0.0 0.02" rgba="0.8 0.1 0.5 1.0"/>
-      <geom type="box" size="0.015 0.015 0.02" pos="0.0 0.0 -0.02" rgba="0.8 0.5 0.1 1.0"/>
+      <geom type="box" size="0.015 0.015 0.02" pos="0.0 0.0 0.02" material="peg1"/>
+      <geom type="box" size="0.015 0.015 0.02" pos="0.0 0.0 -0.02" material="peg2"/>
     </body>
 
     <body name="hole" pos="-0.08 -0.08 0.815">
       <!-- <freejoint/> -->
-      <geom name="hole1" type="box" size="0.02 0.045 0.02" pos="0.045 -0.02 0.02" rgba="0.1 0.8 0.5 1.0"/>
-      <geom name="hole2" type="box" size="0.02 0.045 0.02" pos="-0.045 0.02 0.02" rgba="0.1 0.8 0.5 1.0"/>
-      <geom name="hole3" type="box" size="0.045 0.02 0.02" pos="0.02 0.045 0.02" rgba="0.1 0.8 0.5 1.0"/>
-      <geom name="hole4" type="box" size="0.045 0.02 0.02" pos="-0.02 -0.045 0.02" rgba="0.1 0.8 0.5 1.0"/>
+      <geom name="hole1" type="box" size="0.02 0.045 0.02" pos="0.045 -0.02 0.02" material="hole"/>
+      <geom name="hole2" type="box" size="0.02 0.045 0.02" pos="-0.045 0.02 0.02" material="hole"/>
+      <geom name="hole3" type="box" size="0.045 0.02 0.02" pos="0.02 0.045 0.02" material="hole"/>
+      <geom name="hole4" type="box" size="0.045 0.02 0.02" pos="-0.02 -0.045 0.02" material="hole"/>
     </body>
   </worldbody>
 

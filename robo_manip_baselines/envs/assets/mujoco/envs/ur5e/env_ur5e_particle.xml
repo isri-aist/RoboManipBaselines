@@ -3,15 +3,26 @@
 
   <size memory="1G"/>
 
+  <asset>
+    <texture name="source_case" type="cube" file="general/wood1.png"/>
+    <material name="source_case" texture="source_case" rgba="0.5 0.5 1.0 1.0" specular="0.2" shininess="0.3"/>
+    <texture name="goal_case" type="cube" file="general/wood1.png"/>
+    <material name="goal_case" texture="goal_case" rgba="0.8 0.1 0.8 1.0" specular="0.2" shininess="0.3"/>
+    <texture name="scoop" type="cube" file="general/rubber1.png"/>
+    <material name="scoop" texture="scoop" rgba="0.2 0.2 0.8 0.7" specular="0.5" shininess="1.0"/>
+    <texture name="particle" type="cube" file="general/rubber2.png"/>
+    <material name="particle" texture="particle" rgba="1.0 1.0 0.5 1.0" specular="0.5" shininess="1.0"/>
+  </asset>
+
   <default>
     <default class="source_case">
-      <geom type="box" size="0.005 0.125 0.08" rgba="0.8 0.1 0.5 1.0"/>
+      <geom type="box" size="0.005 0.125 0.08" material="source_case"/>
     </default>
     <default class="goal_case">
-      <geom type="box" size="0.005 0.085 0.08" rgba="0.1 0.5 0.8 1.0"/>
+      <geom type="box" size="0.005 0.085 0.08" material="goal_case"/>
     </default>
     <default class="scoop">
-      <geom type="box" rgba="0.1 0.8 0.1 1.0"/>
+      <geom type="box" material="scoop"/>
     </default>
   </default>
 
@@ -25,6 +36,11 @@
     <camera name="side" mode="fixed" pos="-0.1 -0.75 0.9" euler="1.5708 0.0 0.0"/>
 
     <geom name="floor" size="0 0 0.05" type="plane" material="floor"/>
+
+    <geom name="wall1" type="box" size="10 10 0.01" pos="10 0 10" zaxis="1 0 0" material="wall"/>
+    <geom name="wall2" type="box" size="10 10 0.01" pos="-10 0 10" zaxis="1 0 0" material="wall"/>
+    <geom name="wall3" type="box" size="10 10 0.01" pos="0 10 10" zaxis="0 1 0" material="wall"/>
+    <geom name="wall4" type="box" size="10 10 0.01" pos="0 -10 10" zaxis="0 1 0" material="wall"/>
 
     <body name="table">
       <geom type="box" size="0.275 0.5 0.4" pos="0 0 0.4" material="table_base"/>
@@ -64,7 +80,7 @@
 
     <body name="particle" pos="-0.05 0.1 0.795" euler="0.01 0.01 0.0">
       <composite type="particle" count="8 8 3" spacing="0.02" offset="0 0 0.3">
-        <geom size="0.01" rgba="0.8 0.8 0.2 1.0"/>
+        <geom size="0.01" material="particle"/>
       </composite>
     </body>
   </worldbody>

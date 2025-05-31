@@ -5,8 +5,11 @@
   <include file="../../robots/ur5e/ur5e_integrated_specific_config.xml"/>
 
   <asset>
-    <texture name="table_plate2" file="table/table2.png" type="2d"/>
-    <material name="table_plate2" texture="table_plate2" specular="0.0" shininess="0.0"/>
+    <texture name="toolbox" file="general/metal1.png" type="cube"/>
+    <material name="toolbox" texture="toolbox" rgba="0.4 0.4 0.5 1.0" specular="1.0" shininess="1.0"/>
+    <texture name="mat" file="general/fabric1.png" type="cube"/>
+    <material name="mat1" texture="mat" rgba="0.8 0.8 0.1 1.0" specular="0.1" shininess="0.1"/>
+    <material name="mat2" texture="mat" rgba="0.6 0.0 0.4 1.0" specular="0.1" shininess="0.1"/>
   </asset>
 
   <worldbody>
@@ -17,9 +20,14 @@
 
     <geom name="floor" size="0 0 0.05" type="plane" material="floor"/>
 
+    <geom name="wall1" type="box" size="10 10 0.01" pos="10 0 10" zaxis="1 0 0" material="wall"/>
+    <geom name="wall2" type="box" size="10 10 0.01" pos="-10 0 10" zaxis="1 0 0" material="wall"/>
+    <geom name="wall3" type="box" size="10 10 0.01" pos="0 10 10" zaxis="0 1 0" material="wall"/>
+    <geom name="wall4" type="box" size="10 10 0.01" pos="0 -10 10" zaxis="0 1 0" material="wall"/>
+
     <body name="table">
       <geom type="box" size="0.275 0.5 0.4" pos="0 0 0.4" material="table_base"/>
-      <geom type="box" size="0.275 0.5 0.0075" pos="0 0 0.8075" material="table_plate2"/>
+      <geom type="box" size="0.275 0.5 0.0075" pos="0 0 0.8075" material="table_plate"/>
     </body>
 
     <body name="stand">
@@ -32,15 +40,15 @@
 
     <body name="toolbox" pos="0.0 -0.2 0.815" euler="0.0 0.0 1.5708">
       <freejoint name="toolbox_freejoint"/>
-      <geom type="box" size="0.06 0.06 0.04" pos="0.0 0.0 0.04" rgba="0.1 0.5 0.1 1.0"/>
-      <geom type="box" size="0.008 0.005 0.04" pos="0.0 -0.03 0.08" rgba="0.1 0.5 0.1 1.0"/>
-      <geom type="box" size="0.008 0.005 0.04" pos="0.0 0.03 0.08" rgba="0.1 0.5 0.1 1.0"/>
-      <geom type="box" size="0.008 0.008 0.04" pos="0.0 0.0 0.12" euler="1.5708 0.0 0.0" rgba="0.1 0.5 0.1 1.0"/>
+      <geom type="box" size="0.06 0.06 0.04" pos="0.0 0.0 0.04" material="toolbox"/>
+      <geom type="box" size="0.008 0.005 0.04" pos="0.0 -0.03 0.08" material="toolbox"/>
+      <geom type="box" size="0.008 0.005 0.04" pos="0.0 0.03 0.08" material="toolbox"/>
+      <geom type="box" size="0.008 0.008 0.04" pos="0.0 0.0 0.12" euler="1.5708 0.0 0.0" material="toolbox"/>
     </body>
 
     <body name="mat" pos="0.0 0.2 0.815">
-      <geom type="box" size="0.08 0.08 0.001" pos="0.0 0.0 0.002" rgba="0.8 0.8 0.1 1.0"/>
-      <geom type="box" size="0.12 0.12 0.001" pos="0.0 0.0 0.001" rgba="0.6 0.0 0.4 1.0"/>
+      <geom type="box" size="0.08 0.08 0.001" pos="0.0 0.0 0.002" material="mat1"/>
+      <geom type="box" size="0.12 0.12 0.001" pos="0.0 0.0 0.001" material="mat2"/>
     </body>
   </worldbody>
 </mujoco>

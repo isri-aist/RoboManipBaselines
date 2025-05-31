@@ -5,8 +5,12 @@
   <include file="../../robots/ur5e/ur5e_integrated_specific_config.xml"/>
 
   <asset>
-    <texture name="table_plate2" file="table/table2.png" type="2d"/>
-    <material name="table_plate2" texture="table_plate2" specular="0.0" shininess="0.0"/>
+    <texture name="door_base" file="general/metal2.png" type="cube"/>
+    <material name="door_base" texture="door_base" rgba="0.3 0.3 0.3 1.0" specular="1.0" shininess="1.0"/>
+    <texture name="door_board" file="general/wood3.png" type="2d"/>
+    <material name="door_board" texture="door_board" texrepeat="4 4" rgba="0.8 0.5 0.4 1.0" specular="0.2" shininess="0.3"/>
+    <texture name="door_handle" file="general/metal2.png" type="cube"/>
+    <material name="door_handle" texture="door_handle" rgba="0.8 0.8 0.8 1.0" specular="1.0" shininess="1.0"/>
   </asset>
 
   <worldbody>
@@ -17,9 +21,14 @@
 
     <geom name="floor" size="0 0 0.05" type="plane" material="floor"/>
 
+    <geom name="wall1" type="box" size="10 10 0.01" pos="10 0 10" zaxis="1 0 0" material="wall"/>
+    <geom name="wall2" type="box" size="10 10 0.01" pos="-10 0 10" zaxis="1 0 0" material="wall"/>
+    <geom name="wall3" type="box" size="10 10 0.01" pos="0 10 10" zaxis="0 1 0" material="wall"/>
+    <geom name="wall4" type="box" size="10 10 0.01" pos="0 -10 10" zaxis="0 1 0" material="wall"/>
+
     <body name="table">
       <geom type="box" size="0.275 0.5 0.4" pos="0 0 0.4" material="table_base"/>
-      <geom type="box" size="0.275 0.5 0.0075" pos="0 0 0.8075" material="table_plate2"/>
+      <geom type="box" size="0.275 0.5 0.0075" pos="0 0 0.8075" material="table_plate"/>
     </body>
 
     <body name="stand">
@@ -31,13 +40,13 @@
     </body>
 
     <body name="door" pos="0.15 -0.08 0.815">
-      <geom type="cylinder" size="0.015 0.15" pos="0.0 0.1 0.15" rgba="0.1 0.3 0.1 1.0"/>
-      <geom type="cylinder" size="0.015 0.15" pos="0.0 -0.1 0.15" rgba="0.1 0.3 0.1 1.0"/>
+      <geom type="cylinder" size="0.015 0.15" pos="0.0 0.1 0.15" material="door_base"/>
+      <geom type="cylinder" size="0.015 0.15" pos="0.0 -0.1 0.15" material="door_base"/>
       <body pos="0.0 0.1 0.15">
         <joint name="door" axis="0 0 1" range="-3.1415 0.0" armature="1e-5"/>
-        <geom type="box" size="0.005 0.09 0.145" pos="0.0 -0.1 0.0" rgba="0.7 0.9 0.9 1.0"/>
-        <geom type="cylinder" size="0.005 0.02" pos="-0.02 -0.17 0.0" euler="0.0 1.5708 0.0" rgba="0.1 0.6 0.3 1.0"/>
-        <geom type="cylinder" size="0.0075 0.03" pos="-0.035 -0.145 0.0" euler="1.5708 0.0 0.0" rgba="0.1 0.6 0.3 1.0"/>
+        <geom type="box" size="0.145 0.09 0.005" pos="0.0 -0.1 0.0" zaxis="1 0 0" material="door_board"/>
+        <geom type="cylinder" size="0.005 0.02" pos="-0.02 -0.17 0.0" euler="0.0 1.5708 0.0" material="door_handle"/>
+        <geom type="cylinder" size="0.0075 0.03" pos="-0.035 -0.145 0.0" euler="1.5708 0.0 0.0" material="door_handle"/>
       </body>
     </body>
   </worldbody>
