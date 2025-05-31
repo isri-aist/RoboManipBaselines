@@ -14,13 +14,13 @@
     <texture type="skybox" builtin="gradient" rgb1="0.9 1.0 1.0" rgb2="0.9 1.0 1.0" width="512" height="3072"/>
     <texture name="floor" file="floor/floor1.png" type="2d"/>
     <material name="floor" texture="floor" specular="0.2" shininess="0.3"/>
-    <texture name="wall" file="wall/wall1.png" type="2d"/>
+    <texture name="wall" file="wall/wall1.png" type="cube"/>
     <material name="wall" texture="wall" specular="0.2" shininess="0.3"/>
-    <texture name="table_plate" file="table/table3.png" type="2d"/>
+    <texture name="table_plate" file="table/table3.png" type="cube"/>
     <material name="table_plate" texture="table_plate" specular="0.0" shininess="0.0"/>
-    <texture name="table_base" file="general/metal1.png" type="2d"/>
+    <texture name="table_base" file="general/metal1.png" type="cube"/>
     <material name="table_base" texture="table_base" rgba="1.0 0.93 0.7 1" specular="0.5" shininess="5.0"/>
-    <texture name="stand" file="general/metal1.png" type="2d"/>
+    <texture name="stand" file="general/metal1.png" type="cube"/>
     <material name="stand" texture="stand" rgba="0.05 0.22 0.48 1" specular="0.5" shininess="5.0"/>
   </asset>
 </mujoco>
