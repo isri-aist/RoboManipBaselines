@@ -2,6 +2,7 @@ import argparse
 import datetime
 import os
 import pickle
+import socket
 import sys
 import time
 from abc import ABC, abstractmethod
@@ -122,7 +123,7 @@ class EndRolloutPhase(PhaseBase):
     def check_transition(self):
         if (self.op.key == ord("n")) or self.op.args.auto_exit:
             self.op.episode_idx += 1
-            if self.op.episode_idx == len(self.op.args.world_idx_list):
+            if False:  # self.op.episode_idx == len(self.op.args.world_idx_list):
                 self.op.quit_flag = True
             else:
                 self.op.reset_flag = True
@@ -131,6 +132,8 @@ class EndRolloutPhase(PhaseBase):
 
 
 class RolloutBase(ABC):
+    SOCKET_PATH = "/tmp/rmb.sock"
+
     def __init__(self):
         self.setup_args()
 
@@ -157,6 +160,9 @@ class RolloutBase(ABC):
         self.phase_manager = PhaseManager(phase_order)
 
         self.setup_variables()
+
+        if os.path.exists(self.SOCKET_PATH):
+            os.remove(self.SOCKET_PATH)
 
     def setup_args(self, parser=None, argv=None):
         if parser is None:
@@ -380,39 +386,69 @@ class RolloutBase(ABC):
         self.quit_flag = False
         self.inference_duration_list = []
 
-        while True:
-            if self.reset_flag:
-                self.reset()
-                self.reset_flag = False
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
+            server.bind(self.SOCKET_PATH)
+            server.listen()
+            print("[Robot] Robot control process started...")
 
-            self.phase_manager.pre_update()
+            conn = None
+            while True:
+                if self.reset_flag:
+                    self.reset()
+                    self.reset_flag = False
+                    if conn:
+                        conn.close()
+                    conn, _ = server.accept()
+                    print("[Robot] New connection accepted.")
 
-            env_action = np.concatenate(
-                [
-                    self.motion_manager.get_command_data(key)
-                    for key in self.env.unwrapped.command_keys_for_step
-                ]
-            )
-            self.obs, self.reward, self.terminated, _, self.info = self.env.step(
-                env_action
-            )
+                    # Blocking receive for task description
+                    self.args.task_desc = conn.recv(1024).decode("utf-8")
+                    print(f'[Robot] Received task description: "{self.args.task_desc}"')
 
-            self.phase_manager.post_update()
+                    # Set non-blocking mode for done signal
+                    conn.setblocking(False)
 
-            self.key = cv2.waitKey(1)
-            self.phase_manager.check_transition()
+                self.phase_manager.pre_update()
 
-            if self.key == 27:  # escape key
-                self.quit_flag = True
-            if self.quit_flag:
-                break
+                env_action = np.concatenate(
+                    [
+                        self.motion_manager.get_command_data(key)
+                        for key in self.env.unwrapped.command_keys_for_step
+                    ]
+                )
+                self.obs, self.reward, self.terminated, _, self.info = self.env.step(
+                    env_action
+                )
 
-        if self.args.result_filename is not None:
-            print(
-                f"[{self.__class__.__name__}] Save the rollout results: {self.args.result_filename}"
-            )
-            with open(self.args.result_filename, "w") as result_file:
-                yaml.dump(self.result, result_file)
+                self.phase_manager.post_update()
+
+                self.key = cv2.waitKey(1)
+
+                # Non-blocking check for done signal
+                try:
+                    done_signal = conn.recv(1024).decode("utf-8")
+                    if done_signal:
+                        print(f"\n[Robot] Received done signal: {done_signal}")
+                        self.key = ord("n")  # force transition
+                except BlockingIOError:
+                    pass  # nothing received
+
+                self.phase_manager.check_transition()
+
+                if self.key == 27:  # escape key
+                    self.quit_flag = True
+                if self.quit_flag:
+                    break
+
+            if self.args.result_filename is not None:
+                print(
+                    f"[{self.__class__.__name__}] Save the rollout results: {self.args.result_filename}"
+                )
+                with open(self.args.result_filename, "w") as result_file:
+                    yaml.dump(self.result, result_file)
+
+            if conn:
+                conn.close()
 
         self.print_statistics()
 

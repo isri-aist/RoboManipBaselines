@@ -83,6 +83,11 @@ benchmarks = [
   "python-pptx",
   "imageio-ffmpeg",
 ]
+interactive-demo = [
+  "openai",
+  "sounddevice",
+  "pydub",
+]
 
 [tool.setuptools.packages.find]
 include = ["robo_manip_baselines", "robo_manip_baselines.*"]
