@@ -204,10 +204,10 @@ class VoiceRobotAssistant:
     def run_task_cycle(self, reprompt=True):
         if reprompt:
             if self.first_prompt:
-                prompt_text = "What would you like me to do?"
+                prompt_text = "何をしましょうか？"
                 self.first_prompt = False
             else:
-                prompt_text = "What should I do next?"
+                prompt_text = "次は何をしましょうか？"
 
             print("[Robot]", prompt_text)
             self.synthesize_speech(prompt_text)
@@ -222,7 +222,9 @@ class VoiceRobotAssistant:
             task_desc = self.find_closest_task_desc(user_text)
         except RuntimeError as e:
             print(f"[Error] {e}")
-            self.synthesize_speech("I could not understand. Please say it again.")
+            self.synthesize_speech(
+                "すみません、分かりませんでした。もう一度言ってください。"
+            )
             self.play_audio()
             return False
 
