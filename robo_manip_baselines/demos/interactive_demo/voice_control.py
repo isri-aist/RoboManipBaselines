@@ -5,11 +5,30 @@ import tempfile
 import time
 import wave
 
+import httpx
 import numpy as np
 import openai
 import sounddevice as sd
+from openai import OpenAIError
 from pydub import AudioSegment
 from pydub.playback import play
+
+
+def call_with_retry(call_fn, max_retries=3, timeout_sec=10, wait_sec=3):
+    for attempt in range(max_retries):
+        try:
+            return call_fn(timeout=timeout_sec)
+        except (
+            openai.APITimeoutError,
+            httpx.TimeoutException,
+            httpx.RequestError,
+        ) as e:
+            print(f"[Retry] Attempt {attempt+1} failed with timeout: {e}")
+            time.sleep(wait_sec)
+        except OpenAIError as e:
+            print(f"[Error] OpenAI API error: {e}")
+            break
+    raise RuntimeError(f"Failed after {max_retries} attempts.")
 
 
 class VoiceRobotAssistant:
@@ -104,11 +123,14 @@ class VoiceRobotAssistant:
             wf.writeframes((audio * 32767).astype(np.int16).tobytes())
 
     def transcribe_audio(self):
-        with open(self.wav_path, "rb") as f:
-            transcript = openai.audio.transcriptions.create(
-                model="whisper-1", file=f, language="ja"
-            )
-        return transcript.text
+        def api_call(timeout):
+            with open(self.wav_path, "rb") as f:
+                return openai.audio.transcriptions.create(
+                    model="whisper-1", file=f, language="ja", timeout=timeout
+                )
+
+        transcript = call_with_retry(api_call)
+        return transcript.text.strip()
 
     def find_closest_task_desc(self, user_text):
         script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -145,27 +167,35 @@ class VoiceRobotAssistant:
             raise RuntimeError(f"Invalid reply for task index: '{reply}'")
 
     def chat_with_gpt(self, task_desc):
-        prompt = f"Please respond politely in Japanese using the format 'わかりました。***を行います。' for the following task. Assume you are a physical robot: {task_desc}"
+        prompt = f"Respond politely in Japanese to the following command, using the format: 'わかりました。***をやります。' The command may include physical actions: {task_desc}"
 
-        response = openai.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are a kind Japanese-speaking robot assistant.",
-                },
-                {"role": "user", "content": prompt},
-            ],
-        )
-        return response.choices[0].message.content
+        def api_call(timeout):
+            return openai.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a kind Japanese-speaking robot assistant.",
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                timeout=timeout,
+            )
+
+        response = call_with_retry(api_call)
+        return response.choices[0].message.content.strip()
 
     def synthesize_speech(self, text):
         if self.no_speech:
             print(f"[Speech Skipped] Synthesized text: {text}")
             return
-        response = openai.audio.speech.create(
-            model="tts-1", voice="shimmer", input=text
-        )
+
+        def api_call(timeout):
+            return openai.audio.speech.create(
+                model="tts-1", voice="shimmer", input=text.strip(), timeout=timeout
+            )
+
+        response = call_with_retry(api_call)
         with open(self.tts_path, "wb") as f:
             f.write(response.content)
 
