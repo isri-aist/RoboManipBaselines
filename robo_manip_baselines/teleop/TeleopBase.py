@@ -118,11 +118,12 @@ class EndTeleopPhase(PhaseBase):
             self.op.key == ord("s")
         ):
             self.op.save_data()
+            self.op.reset_flag = True
         elif self.op.key == ord("f"):
             print(
                 f"[{self.op.__class__.__name__}] Teleoperation has failed. Reset without saving."
             )
-        self.op.reset_flag = True
+            self.op.reset_flag = True
 
 
 class ReplayPhase(PhaseBase):
