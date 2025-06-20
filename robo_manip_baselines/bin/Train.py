@@ -2,7 +2,9 @@ import argparse
 import importlib
 import re
 import sys
+
 import wandb
+
 
 def camel_to_snake(name):
     """Converts camelCase or PascalCase to snake_case (also converts the first letter to lowercase)"""
@@ -69,6 +71,7 @@ def main():
         train = TrainPolicyClass()
         train.run()
         train.close()
+
 
 if __name__ == "__main__":
     main()
