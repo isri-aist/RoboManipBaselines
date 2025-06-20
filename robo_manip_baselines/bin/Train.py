@@ -2,7 +2,7 @@ import argparse
 import importlib
 import re
 import sys
-
+import wandb
 
 def camel_to_snake(name):
     """Converts camelCase or PascalCase to snake_case (also converts the first letter to lowercase)"""
@@ -34,6 +34,12 @@ def main():
     parser.add_argument(
         "-h", "--help", action="store_true", help="Show this help message and continue"
     )
+    parser.add_argument(
+        "--sweep", action="store_true", help="Run sweep instead of normal training"
+    )
+    parser.add_argument(
+        "--sweep_count", type=int, default=10, help="Number of sweep runs"
+    )
 
     args, remaining_argv = parser.parse_known_args()
     sys.argv = [sys.argv[0]] + remaining_argv
@@ -50,10 +56,19 @@ def main():
     )
     TrainPolicyClass = getattr(policy_module, f"Train{args.policy}")
 
-    train = TrainPolicyClass()
-    train.run()
-    train.close()
+    if args.sweep:
+        print(f"[INFO] Running sweep for policy {args.policy}")
+        sweep_config = TrainPolicyClass.get_sweep_config()
+        sweep_train_fn = TrainPolicyClass.sweep_entrypoint()
 
+        sweep_id = wandb.sweep(sweep_config, project="robomanip-act")
+        wandb.agent(sweep_id, function=sweep_train_fn, count=args.sweep_count)
+
+    else:
+        print(f"[INFO] Running normal training for policy {args.policy}")
+        train = TrainPolicyClass()
+        train.run()
+        train.close()
 
 if __name__ == "__main__":
     main()
