@@ -72,7 +72,7 @@ class TrainAct(TrainBase):
         print(f"  - chunk size: {self.args.chunk_size}")
 
     def train_loop(self):
-        # Update args nếu có wandb.config (sweep mode)
+        # Update arguments from wandb.config when using W&B sweeps
         if wandb.run is not None and hasattr(wandb, "config"):
             config = wandb.config
             self.args.lr = config.lr
