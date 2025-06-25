@@ -23,7 +23,7 @@ class TrainAct(TrainBase):
         parser.set_defaults(image_aug_std=0.1)
 
         parser.set_defaults(batch_size=8)
-        parser.set_defaults(num_epochs=1000)
+        parser.set_defaults(num_epochs=10)
         parser.set_defaults(lr=1e-5)
 
         parser.add_argument("--kl_weight", type=int, default=10, help="KL weight")
@@ -172,27 +172,3 @@ class TrainAct(TrainBase):
             wandb.save(best_ckpt_path)
 
         wandb.finish()
-
-    # Sweep entrypoint
-    @classmethod
-    def sweep_entrypoint(cls):
-        def sweep_train():
-            trainer = cls()
-            trainer.run()
-            trainer.close()
-
-        return sweep_train
-
-    # Sweep config
-    @classmethod
-    def get_sweep_config(cls):
-        return {
-            "method": "bayes",
-            "metric": {"name": "val_loss", "goal": "minimize"},
-            "parameters": {
-                "lr": {"min": 1e-6, "max": 5e-4},
-                "kl_weight": {"values": [1, 5, 10, 20]},
-                "chunk_size": {"values": [50, 100, 200]},
-                "hidden_dim": {"values": [256, 512, 1024]},
-            },
-        }

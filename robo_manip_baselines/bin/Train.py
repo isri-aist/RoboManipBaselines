@@ -60,11 +60,25 @@ def main():
 
     if args.sweep:
         print(f"[INFO] Running sweep for policy {args.policy}")
-        sweep_config = TrainPolicyClass.get_sweep_config()
-        sweep_train_fn = TrainPolicyClass.sweep_entrypoint()
+
+        sweep_config = {
+            "method": "bayes",
+            "metric": {"name": "val_loss", "goal": "minimize"},
+            "parameters": {
+                "lr": {"min": 1e-6, "max": 5e-4},
+                "kl_weight": {"values": [1, 5, 10, 20]},
+                "chunk_size": {"values": [50, 100, 200]},
+                "hidden_dim": {"values": [256, 512, 1024]},
+            },
+        }
+
+        def sweep_train():
+            train = TrainPolicyClass()
+            train.run()
+            train.close()
 
         sweep_id = wandb.sweep(sweep_config, project="robomanip-act")
-        wandb.agent(sweep_id, function=sweep_train_fn, count=args.sweep_count)
+        wandb.agent(sweep_id, function=sweep_train, count=args.sweep_count)
 
     else:
         print(f"[INFO] Running normal training for policy {args.policy}")
