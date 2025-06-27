@@ -2,6 +2,7 @@ import os
 import sys
 
 import torch
+import wandb
 from tqdm import tqdm
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../../../third_party/act"))
@@ -22,7 +23,7 @@ class TrainAct(TrainBase):
         parser.set_defaults(image_aug_std=0.1)
 
         parser.set_defaults(batch_size=8)
-        parser.set_defaults(num_epochs=1000)
+        parser.set_defaults(num_epochs=10)
         parser.set_defaults(lr=1e-5)
 
         parser.add_argument("--kl_weight", type=int, default=10, help="KL weight")
@@ -71,6 +72,39 @@ class TrainAct(TrainBase):
         print(f"  - chunk size: {self.args.chunk_size}")
 
     def train_loop(self):
+        # Update arguments from wandb.config when using W&B sweeps
+        if wandb.run is not None and hasattr(wandb, "config"):
+            config = wandb.config
+            self.args.lr = config.lr
+            self.args.kl_weight = config.kl_weight
+            self.args.chunk_size = config.chunk_size
+            self.args.hidden_dim = config.hidden_dim
+
+        # Experiment Tracking & Visualization
+        wandb.init(
+            project="robomanip-act",
+            config={
+                "learning_rate": self.args.lr,
+                "epochs": self.args.num_epochs,
+                "batch_size": self.args.batch_size,
+                "kl_weight": self.args.kl_weight,
+                "chunk_size": self.args.chunk_size,
+                "hidden_dim": self.args.hidden_dim,
+                "dim_feedforward": self.args.dim_feedforward,
+                "model": "ACTPolicy",
+                "dataset": getattr(self.args, "dataset_name", "Unknown"),
+                "device": torch.cuda.get_device_name(0)
+                if torch.cuda.is_available()
+                else "CPU",
+            },
+            tags=["experiment-tracking", "sweep-ready"],
+            notes="Training with wandb integration",
+        )
+
+        # Log gradients and parameters
+        wandb.watch(self.policy, log="all")
+
+        step = 0
         for epoch in tqdm(range(self.args.num_epochs)):
             # Run train step
             self.policy.train()
@@ -81,8 +115,22 @@ class TrainAct(TrainBase):
                 loss = batch_result["loss"]
                 loss.backward()
                 self.optimizer.step()
-                batch_result_list.append(self.detach_batch_result(batch_result))
-            self.log_epoch_summary(batch_result_list, "train", epoch)
+                batch_result_detached = self.detach_batch_result(batch_result)
+                batch_result_list.append(batch_result_detached)
+
+                step += 1
+                wandb.log(
+                    {
+                        "step": step,
+                        "train_loss_step": loss.item(),
+                        "train_l1_step": batch_result_detached.get("l1", 0),
+                        "train_kl_step": batch_result_detached.get("kl", 0),
+                    }
+                )
+
+            train_epoch_summary = self.log_epoch_summary(
+                batch_result_list, "train", epoch
+            )
 
             # Run validation step
             with torch.inference_mode():
@@ -96,12 +144,31 @@ class TrainAct(TrainBase):
                 # Update best checkpoint
                 self.update_best_ckpt(epoch_summary)
 
-            # Save current checkpoint
+            wandb.log(
+                {
+                    "epoch": epoch,
+                    "train_loss": train_epoch_summary.get("loss", 0),
+                    "train_l1": train_epoch_summary.get("l1", 0),
+                    "train_kl": train_epoch_summary.get("kl", 0),
+                    "val_loss": epoch_summary.get("loss", 0),
+                    "val_l1": epoch_summary.get("l1", 0),
+                    "val_kl": epoch_summary.get("kl", 0),
+                }
+            )
+
             if epoch % max(self.args.num_epochs // 10, 1) == 0:
-                self.save_current_ckpt(f"epoch{epoch:0>3}")
+                model_path = self.save_current_ckpt(f"epoch{epoch:0>3}")
+                if model_path:
+                    wandb.save(model_path)
 
-        # Save last checkpoint
-        self.save_current_ckpt("last")
+        # Save last model
+        last_ckpt_path = self.save_current_ckpt("last")
+        if last_ckpt_path:
+            wandb.save(last_ckpt_path)
 
-        # Save best checkpoint
-        self.save_best_ckpt()
+        # Save best model
+        best_ckpt_path = self.save_best_ckpt()
+        if best_ckpt_path:
+            wandb.save(best_ckpt_path)
+
+        wandb.finish()
