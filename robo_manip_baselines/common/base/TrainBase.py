@@ -485,6 +485,7 @@ class TrainBase(ABC):
 
         ckpt_path = os.path.join(self.args.checkpoint_dir, f"policy_{ckpt_suffix}.ckpt")
         torch.save(policy.state_dict(), ckpt_path)
+        return ckpt_path
 
     def save_best_ckpt(self):
         ckpt_path = os.path.join(self.args.checkpoint_dir, "policy_best.ckpt")
@@ -492,6 +493,7 @@ class TrainBase(ABC):
         print(
             f"[{self.__class__.__name__}] Best val loss is {self.best_ckpt_info['loss']:.3f} at epoch {self.best_ckpt_info['epoch']}"
         )
+        return ckpt_path
 
     def get_total_memory_usage(self):
         process = psutil.Process()
