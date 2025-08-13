@@ -2,6 +2,8 @@ import argparse
 import importlib
 import sys
 
+import wandb
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -28,6 +30,12 @@ def main():
     parser.add_argument(
         "-h", "--help", action="store_true", help="Show this help message and continue"
     )
+    parser.add_argument(
+        "--sweep", action="store_true", help="Run sweep instead of normal training"
+    )
+    parser.add_argument(
+        "--sweep_count", type=int, default=10, help="Number of sweep runs"
+    )
 
     args, remaining_argv = parser.parse_known_args()
     sys.argv = [sys.argv[0]] + remaining_argv
@@ -46,9 +54,33 @@ def main():
     )
     TrainPolicyClass = getattr(policy_module, f"Train{args.policy}")
 
-    train = TrainPolicyClass()
-    train.run()
-    train.close()
+    if args.sweep:
+        print(f"[INFO] Running sweep for policy {args.policy}")
+
+        sweep_config = {
+            "method": "bayes",
+            "metric": {"name": "val_loss", "goal": "minimize"},
+            "parameters": {
+                "lr": {"min": 1e-6, "max": 5e-4},
+                "kl_weight": {"values": [1, 5, 10, 20]},
+                "chunk_size": {"values": [50, 100, 200]},
+                "hidden_dim": {"values": [256, 512, 1024]},
+            },
+        }
+
+        def sweep_train():
+            train = TrainPolicyClass()
+            train.run()
+            train.close()
+
+        sweep_id = wandb.sweep(sweep_config, project="robomanip-act")
+        wandb.agent(sweep_id, function=sweep_train, count=args.sweep_count)
+
+    else:
+        print(f"[INFO] Running normal training for policy {args.policy}")
+        train = TrainPolicyClass()
+        train.run()
+        train.close()
 
 
 if __name__ == "__main__":
