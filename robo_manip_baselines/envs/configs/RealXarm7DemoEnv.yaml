@@ -2,6 +2,6 @@ robot_ip: "192.168.1.244"
 camera_ids:
   front: "314422070401"
   hand: "332522077926"
-gelsight_ids:
-  tactile_left: "GelSight Mini R0B 2BNK-CE0U: Ge"
-  tactile_right: "GelSight Mini R0B 2BG8-0H3X: Ge"
+#gelsight_ids:
+  #tactile_left: "GelSight Mini R0B 2BNK-CE0U: Ge"
+  #tactile_right: "GelSight Mini R0B 2BG8-0H3X: Ge"

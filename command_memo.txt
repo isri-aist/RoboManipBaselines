@@ -1,0 +1,29 @@
+
+
+================================================================================
+# Go to the top directory of this repository
+cd robo_manip_baselines
+# Connect a SpaceMouse to your PC
+python ./bin/Teleop.py MujocoXarm7Ring --world_idx_list 0 5 --input_device keyboard
+================================================================================
+
+
+
+
+================================================================================
+# Go to the top directory of this repository
+cd robo_manip_baselines
+python ./bin/Rollout.py Act MujocoUR5eCable \
+--checkpoint robo_manip_baselines/checkpoint/Act/training_data_Act_20250908_154926/policy_last.ckpt \
+--world_idx 0
+================================================================================
+
+
+
+
+==========================================================================================================
+python ./bin/Teleop.py RealXarm7Demo --config ./envs/configs/RealXarm7DemoEnv.yaml --input_device spacemouse
+python ./bin/Train.py Act --dataset_dir ./dataset/RealXarm7Demo_20 --num_epochs 250
+python ./bin/Rollout.py Act RealXarm7Demo --config ./envs/configs/RealXarm7DemoEnv.yaml --checkpoint ./checkpoint/Act/RealXarm7Demo_20250911_162223_Act_20250911_163110/policy_best.ckpt --wait_before_start
+====================================================================================================
+
