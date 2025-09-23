@@ -5,7 +5,7 @@ from torchvision.ops.misc import FrozenBatchNorm2d
 
 
 
-class Agent(nn.Module):
+#class Agent(nn.Module):
     def __init__(self, envs):
         super().__init__()
         self.critic = nn.Sequential(

@@ -11,6 +11,7 @@ class RolloutMain:
     operation_parent_module_str = "robo_manip_baselines.envs.operation"
     policy_parent_module_str = "robo_manip_baselines.policy"
     policy_choices = [
+        "Ppo"
         "Mlp",
         "Sarnn",
         "Act",

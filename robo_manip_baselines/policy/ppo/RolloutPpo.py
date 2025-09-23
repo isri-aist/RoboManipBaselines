@@ -8,7 +8,7 @@ from robo_manip_baselines.common import RolloutBase, denormalize_data, normalize
 from .MlpPolicy import MlpPolicy
 
 
-class RolloutMlp(RolloutBase):
+class RolloutPpo(RolloutBase):
     def setup_policy(self):
         # Print policy information
         self.print_policy_info()
