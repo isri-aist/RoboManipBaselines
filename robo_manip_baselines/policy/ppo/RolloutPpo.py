@@ -5,7 +5,7 @@ import torch
 
 from robo_manip_baselines.common import RolloutBase, denormalize_data, normalize_data
 
-from .MlpPolicy import MlpPolicy
+from .PpoPolicy import PpoPolicy
 
 
 class RolloutPpo(RolloutBase):
@@ -17,7 +17,7 @@ class RolloutPpo(RolloutBase):
         )
 
         # Construct policy
-        self.policy = MlpPolicy(
+        self.policy = PpoPolicy(
             self.state_dim,
             self.action_dim,
             len(self.camera_names),

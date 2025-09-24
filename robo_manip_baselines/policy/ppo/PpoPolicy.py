@@ -4,7 +4,7 @@ from torchvision.models import ResNet18_Weights, resnet18
 from torchvision.ops.misc import FrozenBatchNorm2d
 
 
-class MlpPolicy(nn.Module):
+class PpoPolicy(nn.Module):
     """MLP policy with ResNet backbone."""
 
     def __init__(

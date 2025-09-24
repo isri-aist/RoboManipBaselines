@@ -4,12 +4,12 @@ from tqdm import tqdm
 
 from robo_manip_baselines.common import TrainBase
 
-from .MlpDataset import MlpDataset
-from .MlpPolicy import MlpPolicy
+from .PpoDataset import PpoDataset
+from .PpoPolicy import PpoPolicy
 
 
-class TrainMlp(TrainBase):
-    DatasetClass = MlpDataset
+class TrainPpo(TrainBase):
+    DatasetClass = PpoDataset
 
     def set_additional_args(self, parser):
         parser.set_defaults(enable_rmb_cache=True)
@@ -64,7 +64,7 @@ class TrainMlp(TrainBase):
         }
 
         # Construct policy
-        self.policy = MlpPolicy(
+        self.policy = PpoPolicy(
             len(self.model_meta_info["state"]["example"]),
             len(self.model_meta_info["action"]["example"]),
             len(self.args.camera_names),
