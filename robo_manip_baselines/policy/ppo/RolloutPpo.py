@@ -13,6 +13,12 @@ from robo_manip_baselines.common import (
 from .PpoPolicy import PpoPolicy
 
 
+def gripper_q_robomanip_to_maniskill(q_robomanip):
+    """Convert RoboManip gripper scalar to ManiSkill scale."""
+
+    return (q_robomanip - 840.0) / (-1000.0)
+
+
 class RolloutPpo(RolloutBase):
     def setup_policy(self):
         # Print policy information
@@ -77,7 +83,15 @@ class RolloutPpo(RolloutBase):
             ],
             dtype=np.float32,
         )
-        self.state_for_ppo = np.concatenate([qpos, qvel, target_qpos]).astype(
+        qpos_ms = qpos.astype(np.float32).copy()
+        qpos_ms[-1] = gripper_q_robomanip_to_maniskill(qpos_ms[-1])
+        qvel_ms = qvel.astype(np.float32).copy()
+        if qvel_ms.size > 0:
+            qvel_ms[-1] = gripper_q_robomanip_to_maniskill(qvel_ms[-1])
+        target_qpos_ms = target_qpos.copy()
+        target_qpos_ms[-1] = gripper_q_robomanip_to_maniskill(target_qpos_ms[-1])
+
+        self.state_for_ppo = np.concatenate([qpos_ms, qvel_ms, target_qpos_ms]).astype(
             np.float32
         )
         print(
