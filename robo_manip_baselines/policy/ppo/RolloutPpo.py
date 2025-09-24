@@ -57,8 +57,12 @@ class RolloutPpo(RolloutBase):
                 ]
             )
 
-        state = normalize_data(state, self.model_meta_info["state"])
-        state = torch.tensor(state, dtype=torch.float32)
+        print(f"[rollout] raw state shape={state.shape}: {state}")
+
+        norm_state = normalize_data(state, self.model_meta_info["state"])
+        print(f"[rollout] norm state shape={norm_state.shape}: {norm_state}")
+
+        state = torch.tensor(norm_state, dtype=torch.float32)
 
         # Store and return
         if self.state_buf is None:
@@ -111,6 +115,10 @@ class RolloutPpo(RolloutBase):
             state = self.get_state()
             images = self.get_images()
             action = self.policy(state, images)[0]
+            action_np = action.detach().cpu().numpy()
+            print(
+                f"[rollout] policy raw action shape={action_np.shape}: {action_np}"
+            )
             self.policy_action_buf = list(
                 action.cpu().detach().numpy().astype(np.float64)
             )
@@ -118,6 +126,9 @@ class RolloutPpo(RolloutBase):
         # Store action
         self.policy_action = denormalize_data(
             self.policy_action_buf.pop(0), self.model_meta_info["action"]
+        )
+        print(
+            f"[rollout] executed action shape={self.policy_action.shape}: {self.policy_action}"
         )
         self.policy_action_list = np.concatenate(
             [self.policy_action_list, self.policy_action[np.newaxis]]
