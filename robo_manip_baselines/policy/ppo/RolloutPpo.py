@@ -3,7 +3,12 @@ import matplotlib.pylab as plt
 import numpy as np
 import torch
 
-from robo_manip_baselines.common import RolloutBase, denormalize_data, normalize_data
+from robo_manip_baselines.common import (
+    DataKey,
+    RolloutBase,
+    denormalize_data,
+    normalize_data,
+)
 
 from .PpoPolicy import PpoPolicy
 
@@ -56,6 +61,28 @@ class RolloutPpo(RolloutBase):
                     for state_key in self.state_keys
                 ]
             )
+
+        qpos = self.motion_manager.get_data(DataKey.MEASURED_JOINT_POS, self.obs)
+        qvel = self.motion_manager.get_data(DataKey.MEASURED_JOINT_VEL, self.obs)
+        target_qpos = np.array(
+            [
+                -0.00451699561347621,
+                -0.4779577590016519,
+                -0.0059982858387227518,
+                0.8576097778375098,
+                -0.032158957391327556,
+                1.27989111575085,
+                0.05005294852914137,
+                0.0,
+            ],
+            dtype=np.float32,
+        )
+        self.state_for_ppo = np.concatenate([qpos, qvel, target_qpos]).astype(
+            np.float32
+        )
+        print(
+            f"[rollout] state_for_ppo shape={self.state_for_ppo.shape}: {self.state_for_ppo}"
+        )
 
         print(f"[rollout] raw state shape={state.shape}: {state}")
 
