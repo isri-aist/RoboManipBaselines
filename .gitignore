@@ -12,3 +12,7 @@ GPATH
 GRTAGS
 GSYMS
 GTAGS
+
+
+*.pt
+

@@ -33,3 +33,6 @@ python ./bin/Teleop.py RealXarm7Demo --config ./envs/configs/RealXarm7DemoEnv.ya
 python ./bin/Train.py Mlp --dataset_dir ./dataset/RealXarm7Demo_20250911_162223 --num_epochs 250
 python ./bin/Rollout.py Mlp RealXarm7Demo --config ./envs/configs/RealXarm7DemoEnv.yaml --checkpoint ./checkpoint/Mlp/RealXarm7Demo_20250911_162223_Mlp_20250922_162104/policy_epoch175.ckpt --wait_before_start
 ====================================================================================================
+
+Ppo
+python ./bin/Rollout.py Ppo RealXarm7Demo --config ./envs/configs/RealXarm7DemoEnv.yaml --checkpoint 
