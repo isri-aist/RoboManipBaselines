@@ -1,4 +1,6 @@
 import argparse
+import csv
+import json
 import os
 
 import cv2
@@ -151,7 +153,6 @@ class RolloutPpo(RolloutBase):
             default=torch.cuda.is_available(),
             help="Enable CUDA for ManiSkill PPO if available (default: enabled when CUDA exists).",
         )
-
     def setup_model_meta_info(self):
         checkpoint_dir = os.path.split(self.args.checkpoint)[0]
         model_meta_info_path = os.path.join(checkpoint_dir, "model_meta_info.pkl")
@@ -264,6 +265,17 @@ class RolloutPpo(RolloutBase):
             f"[{self.__class__.__name__}] Load ManiSkill PPO checkpoint on {self.device}"
         )
 
+        checkpoint_dir = os.path.dirname(os.path.abspath(self.args.checkpoint))
+        default_name = f"{self.__class__.__name__.lower()}_debug_log.tsv"
+        self._log_path = os.path.join(checkpoint_dir, default_name)
+        os.makedirs(os.path.dirname(self._log_path), exist_ok=True)
+        with open(self._log_path, "w", newline="") as f:
+            writer = csv.writer(f, delimiter="\t")
+            writer.writerow(["step_idx", "obs", "direct_joint_command"])
+        print(
+            f"[{self.__class__.__name__}] Logging observations and actions to {self._log_path}"
+        )
+
     def setup_plot(self):
         num_cols = max(len(self.camera_names), 1)
         fig_ax = plt.subplots(
@@ -321,14 +333,8 @@ class RolloutPpo(RolloutBase):
         self.state_for_ppo = np.concatenate([qpos_ms, qvel_ms, target_qpos_ms]).astype(
             np.float32
         )
-        print(
-            f"[rollout] state_for_ppo shape={self.state_for_ppo.shape}: {self.state_for_ppo}"
-        )
-
-        print(f"[rollout] raw state shape={state.shape}: {state}")
 
         norm_state = normalize_data(state, self.model_meta_info["state"])
-        print(f"[rollout] norm state shape={norm_state.shape}: {norm_state}")
 
         state = torch.tensor(norm_state, dtype=torch.float32)
 
@@ -389,13 +395,6 @@ class RolloutPpo(RolloutBase):
                 self.state_for_ppo, dtype=torch.float32, device=self.device
             ).unsqueeze(0)
 
-            print(
-                "[rollout] obs tensor shape={} values={}".format(
-                    obs_tensor.shape,
-                    obs_tensor.squeeze(0).detach().cpu().numpy(),
-                )
-            )
-
             with torch.no_grad():
                 raw_action = self.policy.get_action(
                     obs_tensor, deterministic=self.args.ppo_deterministic
@@ -425,29 +424,28 @@ class RolloutPpo(RolloutBase):
                     direct_joint_command[-1]
                 )
 
-            action_np = raw_action.detach().cpu().numpy()
-            delta_np = denormalized_delta.detach().cpu().numpy()
-            physical_np = (
-                direct_joint_command.detach().cpu().numpy().astype(np.float64)
-            )
-            print(
-                f"[rollout] policy raw action shape={action_np.shape}: {action_np}"
-            )
-            print(
-                f"[rollout] denormalized delta shape={delta_np.shape}: {delta_np}"
-            )
-            print(
-                f"[rollout] direct joint command shape={physical_np.shape}: {physical_np}"
-            )
-            print(f"[rollout] direct joint command (list)={physical_np.tolist()}")
+            physical_np = direct_joint_command.detach().cpu().numpy().astype(np.float64)
+
+            if hasattr(self, "_log_path") and self._log_path:
+                obs_list = (
+                    obs_tensor.squeeze(0).detach().cpu().numpy().astype(np.float64).tolist()
+                )
+                direct_list = physical_np.tolist()
+                with open(self._log_path, "a", newline="") as f:
+                    writer = csv.writer(f, delimiter="\t")
+                    writer.writerow(
+                        [
+                            int(getattr(self, "rollout_time_idx", 0)),
+                            json.dumps(obs_list),
+                            json.dumps(direct_list),
+                        ]
+                    )
+
             self.policy_action_buf = [physical_np]
 
         # Store action
         self.policy_action = denormalize_data(
             self.policy_action_buf.pop(0), self.model_meta_info["action"]
-        )
-        print(
-            f"[rollout] executed action shape={self.policy_action.shape}: {self.policy_action}"
         )
         self.policy_action_list = np.concatenate(
             [self.policy_action_list, self.policy_action[np.newaxis]]
