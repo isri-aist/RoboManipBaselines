@@ -75,7 +75,38 @@ class ManiSkillPpoAgent(nn.Module):
         return probs.sample()
 
 
-_ACTION_LOW = torch.tensor(
+_NORMALIZED_ACTION_LOW = torch.tensor(-1.0, dtype=torch.float32)
+_NORMALIZED_ACTION_HIGH = torch.tensor(1.0, dtype=torch.float32)
+
+_DELTA_PHYSICAL_LOW = torch.tensor(
+    [
+        -0.1,
+        -0.1,
+        -0.1,
+        -0.1,
+        -0.1,
+        -0.1,
+        -0.1,
+        -0.1,
+    ],
+    dtype=torch.float32,
+)
+
+_DELTA_PHYSICAL_HIGH = torch.tensor(
+    [
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+    ],
+    dtype=torch.float32,
+)
+
+_JOINT_POSITION_LOW = torch.tensor(
     [
         -6.2831853,
         -2.059,
@@ -89,7 +120,7 @@ _ACTION_LOW = torch.tensor(
     dtype=torch.float32,
 )
 
-_ACTION_HIGH = torch.tensor(
+_JOINT_POSITION_HIGH = torch.tensor(
     [
         6.2831853,
         2.0944,
@@ -211,8 +242,23 @@ class RolloutPpo(RolloutBase):
         self.policy.to(self.device)
         self.policy.eval()
 
-        self._maniskill_action_low = _ACTION_LOW.to(self.device)
-        self._maniskill_action_high = _ACTION_HIGH.to(self.device)
+        self._normalized_action_low = torch.full(
+            (self.action_dim,), float(_NORMALIZED_ACTION_LOW.item()), device=self.device
+        )
+        self._normalized_action_high = torch.full(
+            (self.action_dim,), float(_NORMALIZED_ACTION_HIGH.item()), device=self.device
+        )
+
+        if self.action_dim != len(_DELTA_PHYSICAL_LOW):
+            raise ValueError(
+                f"[{self.__class__.__name__}] action dim mismatch for delta bounds: "
+                f"meta={self.action_dim}, expected={len(_DELTA_PHYSICAL_LOW)}"
+            )
+
+        self._delta_physical_low = _DELTA_PHYSICAL_LOW.to(self.device)
+        self._delta_physical_high = _DELTA_PHYSICAL_HIGH.to(self.device)
+        self._joint_position_low = _JOINT_POSITION_LOW.to(self.device)
+        self._joint_position_high = _JOINT_POSITION_HIGH.to(self.device)
 
         print(
             f"[{self.__class__.__name__}] Load ManiSkill PPO checkpoint on {self.device}"
@@ -343,6 +389,13 @@ class RolloutPpo(RolloutBase):
                 self.state_for_ppo, dtype=torch.float32, device=self.device
             ).unsqueeze(0)
 
+            print(
+                "[rollout] obs tensor shape={} values={}".format(
+                    obs_tensor.shape,
+                    obs_tensor.squeeze(0).detach().cpu().numpy(),
+                )
+            )
+
             with torch.no_grad():
                 raw_action = self.policy.get_action(
                     obs_tensor, deterministic=self.args.ppo_deterministic
@@ -350,19 +403,43 @@ class RolloutPpo(RolloutBase):
 
             raw_action = raw_action.squeeze(0)
             clipped_action = torch.clamp(
-                raw_action, self._maniskill_action_low, self._maniskill_action_high
+                raw_action, self._normalized_action_low, self._normalized_action_high
             )
-            physical_action = clipped_action.clone()
-            if physical_action.numel() > 0:
-                physical_action[-1] = gripper_q_maniskill_to_robomanip(
-                    physical_action[-1]
+
+            normalized_span = self._normalized_action_high - self._normalized_action_low
+            delta_scale = (clipped_action - self._normalized_action_low) / normalized_span
+            denormalized_delta = self._delta_physical_low + delta_scale * (
+                self._delta_physical_high - self._delta_physical_low
+            )
+
+            current_joint_pos = obs_tensor[..., : self.action_dim].squeeze(0)
+            direct_joint_command = current_joint_pos + denormalized_delta
+            direct_joint_command = torch.max(
+                torch.min(direct_joint_command, self._joint_position_high),
+                self._joint_position_low,
+            )
+
+            if direct_joint_command.numel() > 0:
+                direct_joint_command = direct_joint_command.clone()
+                direct_joint_command[-1] = gripper_q_maniskill_to_robomanip(
+                    direct_joint_command[-1]
                 )
 
             action_np = raw_action.detach().cpu().numpy()
+            delta_np = denormalized_delta.detach().cpu().numpy()
+            physical_np = (
+                direct_joint_command.detach().cpu().numpy().astype(np.float64)
+            )
             print(
                 f"[rollout] policy raw action shape={action_np.shape}: {action_np}"
             )
-            physical_np = physical_action.detach().cpu().numpy().astype(np.float64)
+            print(
+                f"[rollout] denormalized delta shape={delta_np.shape}: {delta_np}"
+            )
+            print(
+                f"[rollout] direct joint command shape={physical_np.shape}: {physical_np}"
+            )
+            print(f"[rollout] direct joint command (list)={physical_np.tolist()}")
             self.policy_action_buf = [physical_np]
 
         # Store action
