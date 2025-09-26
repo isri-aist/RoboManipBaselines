@@ -23,7 +23,7 @@ class RealEnvBase(EnvDataMixin, gym.Env, ABC):
     ):
         # Setup environment parameters
         self.init_time = time.time()
-        self.dt = 0.05  # [s]
+        self.dt = 0.02  # [s]
         self.world_random_scale = None
 
     def setup_realsense(self, camera_ids):
