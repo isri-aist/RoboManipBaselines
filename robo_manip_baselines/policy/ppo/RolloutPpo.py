@@ -18,13 +18,19 @@ from robo_manip_baselines.common import (
 )
 
 def gripper_q_robomanip_to_maniskill(q_robomanip):
-    """Convert RoboManip gripper scalar to ManiSkill scale."""
+    """Convert RoboManip gripper position scalar to ManiSkill scale."""
 
     return (q_robomanip - 840.0) / (-1000.0)
 
 
+def gripper_qvel_robomanip_to_maniskill(qvel_robomanip):
+    """Convert RoboManip gripper velocity scalar to ManiSkill scale."""
+
+    return qvel_robomanip / (-1000.0)
+
+
 def gripper_q_maniskill_to_robomanip(q_maniskill):
-    """Convert ManiSkill gripper scalar to RoboManip scale."""
+    """Convert ManiSkill gripper position scalar to RoboManip scale."""
 
     return q_maniskill * (-1000.0) + 840.0
 
@@ -138,6 +144,8 @@ _JOINT_POSITION_HIGH = torch.tensor(
 
 
 class RolloutPpo(RolloutBase):
+
+    #RolloutMlpにはない、引数関係などの定義(重要度の低い関数)
     def set_additional_args(self, parser):
         super().set_additional_args(parser)
 
@@ -153,6 +161,7 @@ class RolloutPpo(RolloutBase):
             default=torch.cuda.is_available(),
             help="Enable CUDA for ManiSkill PPO if available (default: enabled when CUDA exists).",
         )
+
     def setup_model_meta_info(self):
         checkpoint_dir = os.path.split(self.args.checkpoint)[0]
         model_meta_info_path = os.path.join(checkpoint_dir, "model_meta_info.pkl")
@@ -326,7 +335,7 @@ class RolloutPpo(RolloutBase):
         qpos_ms[-1] = gripper_q_robomanip_to_maniskill(qpos_ms[-1])
         qvel_ms = qvel.astype(np.float32).copy()
         if qvel_ms.size > 0:
-            qvel_ms[-1] = gripper_q_robomanip_to_maniskill(qvel_ms[-1])
+            qvel_ms[-1] = gripper_qvel_robomanip_to_maniskill(qvel_ms[-1])
         target_qpos_ms = target_qpos.copy()
         target_qpos_ms[-1] = gripper_q_robomanip_to_maniskill(target_qpos_ms[-1])
 
