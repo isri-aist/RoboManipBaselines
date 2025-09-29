@@ -2,6 +2,9 @@ import argparse
 import csv
 import json
 import os
+import time
+import types
+from collections import defaultdict
 
 import cv2
 import matplotlib.pylab as plt
@@ -173,6 +176,12 @@ class RolloutPpo(RolloutBase):
             default=False,
             help="Capture camera and tactile images during rollout (default: False).",
         )
+        parser.add_argument(
+            "--ppo-profile",
+            action=argparse.BooleanOptionalAction,
+            default=False,
+            help="Measure per-step timings for debugging (default: False).",
+        )
 
     def setup_model_meta_info(self):
         checkpoint_dir = os.path.split(self.args.checkpoint)[0]
@@ -302,6 +311,14 @@ class RolloutPpo(RolloutBase):
                 f"[{self.__class__.__name__}] Logging observations and actions to {self._log_path}"
             )
 
+    def setup_variables(self):
+        super().setup_variables()
+
+        self._profile_enabled = bool(getattr(self.args, "ppo_profile", False))
+        if self._profile_enabled:
+            self._profile_data = defaultdict(list)
+            self._wrap_profile_hooks()
+
     def _disable_env_vision(self):
         env = self.env.unwrapped if hasattr(self.env, "unwrapped") else self.env
 
@@ -318,6 +335,30 @@ class RolloutPpo(RolloutBase):
         self.camera_names = []
         if "image" in self.model_meta_info:
             self.model_meta_info["image"]["camera_names"] = []
+
+    def _wrap_profile_hooks(self):
+        env = self.env
+
+        original_step = env.step
+        rollout_self = self
+
+        def profiled_step(env_self, action):
+            start = time.perf_counter()
+            result = original_step(action)
+            rollout_self._profile_data["env_step"].append(time.perf_counter() - start)
+            return result
+
+        env.step = types.MethodType(profiled_step, env)
+
+        original_record_data = self.record_data
+
+        def profiled_record_data():
+            start = time.perf_counter()
+            result = original_record_data()
+            rollout_self._profile_data["record_data"].append(time.perf_counter() - start)
+            return result
+
+        self.record_data = profiled_record_data
 
     def setup_plot(self):
         num_cols = max(len(self.camera_names), 1)
@@ -432,16 +473,31 @@ class RolloutPpo(RolloutBase):
     def infer_policy(self):
         # Infer
         if self.policy_action_buf is None or len(self.policy_action_buf) == 0:
+            profile_enabled = getattr(self, "_profile_enabled", False)
+            if profile_enabled:
+                timer = time.perf_counter
+                total_start = timer()
+                state_start = timer()
+
             self.get_state()  # update buffers and logs
+
+            if profile_enabled:
+                self._profile_data["state_fetch"].append(timer() - state_start)
 
             obs_tensor = torch.tensor(
                 self.state_for_ppo, dtype=torch.float32, device=self.device
             ).unsqueeze(0)
 
+            if profile_enabled:
+                policy_start = timer()
+
             with torch.no_grad():
                 raw_action = self.policy.get_action(
                     obs_tensor, deterministic=self.args.ppo_deterministic
                 )
+
+            if profile_enabled:
+                self._profile_data["policy_forward"].append(timer() - policy_start)
 
             raw_action = raw_action.squeeze(0)
             clipped_action = torch.clamp(
@@ -486,6 +542,9 @@ class RolloutPpo(RolloutBase):
 
             self.policy_action_buf = [physical_np]
 
+            if profile_enabled:
+                self._profile_data["infer_total"].append(timer() - total_start)
+
         # Store action
         self.policy_action = denormalize_data(
             self.policy_action_buf.pop(0), self.model_meta_info["action"]
@@ -493,6 +552,14 @@ class RolloutPpo(RolloutBase):
         self.policy_action_list = np.concatenate(
             [self.policy_action_list, self.policy_action[np.newaxis]]
         )
+
+    def set_command_data(self, action_keys=None):
+        if getattr(self, "_profile_enabled", False):
+            start = time.perf_counter()
+            super().set_command_data(action_keys)
+            self._profile_data["set_command_data"].append(time.perf_counter() - start)
+        else:
+            super().set_command_data(action_keys)
 
     def draw_plot(self):
         # Clear plot
@@ -512,3 +579,16 @@ class RolloutPpo(RolloutBase):
             self.policy_name,
             cv2.cvtColor(np.asarray(self.canvas.buffer_rgba()), cv2.COLOR_RGB2BGR),
         )
+
+    def print_statistics(self):
+        super().print_statistics()
+        if getattr(self, "_profile_enabled", False) and self._profile_data:
+            print(f"[{self.__class__.__name__}] Profiling summary")
+            for key, samples in self._profile_data.items():
+                if not samples:
+                    continue
+                samples_arr = np.array(samples)
+                print(
+                    f"  - {key} [s] | mean: {samples_arr.mean():.2e}, "
+                    f"std: {samples_arr.std():.2e}, min: {samples_arr.min():.2e}, max: {samples_arr.max():.2e}"
+                )
