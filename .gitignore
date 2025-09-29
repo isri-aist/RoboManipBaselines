@@ -13,6 +13,7 @@ GRTAGS
 GSYMS
 GTAGS
 
+*.tsv
 
 *.pt
 
