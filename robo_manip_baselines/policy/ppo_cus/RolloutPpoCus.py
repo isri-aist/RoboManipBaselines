@@ -554,22 +554,10 @@ class RolloutPpoCus(RolloutBase):
             help="Log observations and actions to TSV each step (default: False).",
         )
         parser.add_argument(
-            "--ppo-enable-vision",
-            action=argparse.BooleanOptionalAction,
-            default=False,
-            help="Capture camera and tactile images during rollout (default: False).",
-        )
-        parser.add_argument(
             "--ppo-profile",
             action=argparse.BooleanOptionalAction,
             default=False,
             help="Measure per-step timings for debugging (default: False).",
-        )
-        parser.add_argument(
-            "--ppo-marker-enable",
-            action=argparse.BooleanOptionalAction,
-            default=True,
-            help="Enable background front-camera marker worker (default: True, disable with --no-ppo-marker-enable).",
         )
 
     def setup_model_meta_info(self):
@@ -634,14 +622,8 @@ class RolloutPpoCus(RolloutBase):
         }
 
     def setup_policy(self):
-        disable_env_vision = (
-            not self.args.ppo_enable_vision
-            and not getattr(self.args, "ppo_marker_enable", False)
-        )
-        if disable_env_vision:
-            self._disable_env_vision()
+        # Always keep vision enabled for marker detection
 
-        # Print policy information
         self.print_policy_info()
         print(
             f"  - obs steps: {self.model_meta_info['data']['n_obs_steps']}, action steps: {self.model_meta_info['data']['n_action_steps']}"
@@ -708,13 +690,12 @@ class RolloutPpoCus(RolloutBase):
         super().setup_variables()
 
         self._marker_worker = None
-        if getattr(self.args, "ppo_marker_enable", False):
-            if _GLOBAL_T_BASE_TO_CAMERA is None:
-                print(
-                    f"[{self.__class__.__name__}] T_base→camera calibration not loaded; marker worker disabled.",
-                    flush=True,
-                )
-            else:
+        if _GLOBAL_T_BASE_TO_CAMERA is None:
+            print(
+                f"[{self.__class__.__name__}] T_base→camera calibration not loaded; marker worker disabled.",
+                flush=True,
+            )
+        else:
                 env = self.env.unwrapped if hasattr(self.env, "unwrapped") else self.env
                 front_camera = getattr(env, "cameras", {}).get("front")
                 if front_camera is None:
