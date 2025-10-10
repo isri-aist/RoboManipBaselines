@@ -41,3 +41,7 @@ python ./bin/Rollout.py Ppo RealXarm7Demo --wait_before_start --skip_draw 50 --s
 
 Ppo_cus
 python ./bin/Rollout.py PpoCus RealXarm7Demo --wait_before_start --skip_draw 50 --ppo-marker-enable --ppo-enable-vision --save_rollout --config ./envs/configs/RealXarm7DemoEnv.yaml --checkpoint final_ckpt.pt
+
+
+visualize
+python ./bin/ViewModelMetaInfo.py ./checkpoint/Mlp/RealXarm7Demo_20250911_162223_Mlp_20250922_162104/model_meta_info.pkl
