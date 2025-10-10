@@ -277,7 +277,16 @@ class FrontCameraDetectionWorker:
                                 flush=True,
                             )
                             continue
-                        transforms[int(pose.tag_id)] = self._base_to_camera @ T_cam_to_tag
+                        T_base_to_tag = self._base_to_camera @ T_cam_to_tag
+                        transforms[int(pose.tag_id)] = T_base_to_tag
+                        matrix_str = np.array2string(
+                            T_base_to_tag,
+                            formatter={"float_kind": lambda x: f"{x: .4f}"},
+                        )
+                        print(
+                            f"[FrontCameraDetectionWorker] tag {pose.tag_id} transform:\n{matrix_str}",
+                            flush=True,
+                        )
 
             with self._latest_lock:
                 self._latest_transforms = {
