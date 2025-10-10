@@ -89,12 +89,10 @@ class FrontCameraDetectionWorker:
         self,
         base_to_camera: Optional[np.ndarray],
         intrinsic_info: Optional[Dict[str, Any]] = None,
-        roi: Optional[Tuple[int, int, int, int]] = None,
         tag_size_m: float = DEFAULT_TAG_SIZE_M,
     ):
         self._base_to_camera = None if base_to_camera is None else base_to_camera.astype(np.float64)
         self._intrinsic_info: Dict[str, Any] = intrinsic_info or {}
-        self._roi = roi
         self._tag_size_m = float(tag_size_m)
         self._frame_queue: "queue.Queue[Optional[Tuple[np.ndarray, float]]]" = queue.Queue(maxsize=1)
         self._result_queue: "queue.Queue[Tuple[float, Dict[int, np.ndarray]]]" = queue.Queue(maxsize=1)
@@ -123,6 +121,7 @@ class FrontCameraDetectionWorker:
 
         if not self._detection_available:
             print(
+                "[FrontCameraDetectionWorker] Marker detection disabled (missing dependencies or calibration).",
                 flush=True,
             )
 
@@ -130,6 +129,7 @@ class FrontCameraDetectionWorker:
         if detector is None:
             self._detection_available = False
             print(
+                "[FrontCameraDetectionWorker] Detector initialization failed; detection disabled.",
                 flush=True,
             )
 
@@ -169,20 +169,7 @@ class FrontCameraDetectionWorker:
         if rgb_image is None or self._stop_event.is_set():
             return
 
-        frame = rgb_image
-        if self._roi is not None:
-            x, y, w, h = self._roi
-            x = max(0, int(x))
-            y = max(0, int(y))
-            w = max(1, int(w))
-            h = max(1, int(h))
-            max_y = min(y + h, frame.shape[0])
-            max_x = min(x + w, frame.shape[1])
-            frame = frame[y:max_y, x:max_x]
-            if frame.size == 0:
-                return
-
-        gray_image = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        gray_image = cv2.cvtColor(rgb_image, cv2.COLOR_BGR2GRAY)
         timestamp = time.time()
 
         with self._latest_lock:
@@ -584,14 +571,6 @@ class RolloutPpoCus(RolloutBase):
             default=True,
             help="Enable background front-camera marker worker (default: True, disable with --no-ppo-marker-enable).",
         )
-        parser.add_argument(
-            "--ppo-marker-roi",
-            type=int,
-            nargs=4,
-            metavar=("X", "Y", "W", "H"),
-            default=None,
-            help="Optional ROI (pixels) for front camera marker processing.",
-        )
 
     def setup_model_meta_info(self):
         checkpoint_dir = os.path.split(self.args.checkpoint)[0]
@@ -750,21 +729,15 @@ class RolloutPpoCus(RolloutBase):
                         flush=True,
                     )
                 else:
-                    roi = (
-                        tuple(int(v) for v in self.args.ppo_marker_roi)
-                        if self.args.ppo_marker_roi
-                        else None
-                    )
                     intrinsic_info = self._extract_camera_intrinsic_info(front_camera)
                     self._marker_worker = FrontCameraDetectionWorker(
                         base_to_camera=_GLOBAL_T_BASE_TO_CAMERA,
                         intrinsic_info=intrinsic_info,
-                        roi=roi,
                         tag_size_m=DEFAULT_TAG_SIZE_M,
                     )
                     self._marker_worker.start()
                     print(
-                        f"[{self.__class__.__name__}] Started front camera marker worker with ROI={roi}.",
+                        f"[{self.__class__.__name__}] Started front camera marker worker.",
                         flush=True,
                     )
 
