@@ -857,6 +857,17 @@ class RolloutPpoCus(RolloutBase):
                 ]
             )
 
+        marker_transforms, marker_timestamp = self.get_latest_marker_transforms(poll=True)
+        if marker_transforms:
+            ts_str = f"{marker_timestamp:.3f}" if marker_timestamp is not None else "unknown"
+            print(f"[{self.__class__.__name__}] Latest marker transforms (t={ts_str}):", flush=True)
+            for tag_id, T in marker_transforms.items():
+                matrix_str = np.array2string(
+                    T,
+                    formatter={"float_kind": lambda x: f"{x: .4f}"},
+                )
+                print(f"  tag {tag_id}:\n{matrix_str}", flush=True)
+
         qpos = self.motion_manager.get_data(DataKey.MEASURED_JOINT_POS, self.obs)
         qvel = self.motion_manager.get_data(DataKey.MEASURED_JOINT_VEL, self.obs)
         target_qpos = np.array(
