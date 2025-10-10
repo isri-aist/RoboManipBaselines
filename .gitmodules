@@ -27,3 +27,6 @@
 [submodule "third_party/pyorbbecsdk"]
 	path = third_party/pyorbbecsdk
 	url = https://github.com/orbbec/pyorbbecsdk.git
+[submodule "external/check_AprilTag"]
+	path = external/check_AprilTag
+	url = https://github.com/kotaro-kaji/check_AprilTag.git
