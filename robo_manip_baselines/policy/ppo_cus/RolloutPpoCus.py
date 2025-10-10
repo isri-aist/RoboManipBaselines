@@ -5,6 +5,8 @@ import os
 import time
 import types
 from collections import defaultdict
+import queue
+import threading
 
 import cv2
 import matplotlib.pylab as plt
@@ -19,6 +21,119 @@ from robo_manip_baselines.common import (
     denormalize_data,
     normalize_data,
 )
+
+
+class FrontCameraFrameWorker:
+    """Maintain the latest grayscale frame from the front camera using background threads."""
+
+    def __init__(self, camera, frame_size=(640, 480), roi=None):
+        self._camera = camera
+        self._frame_size = frame_size
+        self._roi = roi
+        self._frame_queue = queue.Queue(maxsize=1)
+        self._stop_event = threading.Event()
+        self._capture_thread = None
+        self._processing_thread = None
+        self._latest_lock = threading.Lock()
+        self._latest_frame = None
+        self._latest_timestamp = None
+
+    def start(self):
+        if self._capture_thread and self._capture_thread.is_alive():
+            return
+
+        self._stop_event.clear()
+        self._capture_thread = threading.Thread(
+            target=self._capture_loop,
+            name="front_camera_capture",
+            daemon=True,
+        )
+        self._processing_thread = threading.Thread(
+            target=self._processing_loop,
+            name="front_camera_process",
+            daemon=True,
+        )
+        self._capture_thread.start()
+        self._processing_thread.start()
+
+    def stop(self):
+        self._stop_event.set()
+        # Unblock the processing thread if it is waiting on the queue.
+        try:
+            self._frame_queue.put_nowait(None)
+        except queue.Full:
+            try:
+                self._frame_queue.get_nowait()
+            except queue.Empty:
+                pass
+            try:
+                self._frame_queue.put_nowait(None)
+            except queue.Full:
+                pass
+
+        if self._capture_thread:
+            self._capture_thread.join(timeout=1.0)
+            self._capture_thread = None
+        if self._processing_thread:
+            self._processing_thread.join(timeout=1.0)
+            self._processing_thread = None
+
+    def get_latest_frame(self):
+        with self._latest_lock:
+            if self._latest_frame is None:
+                return None, None
+            return self._latest_frame.copy(), self._latest_timestamp
+
+    def _capture_loop(self):
+        while not self._stop_event.is_set():
+            try:
+                rgb_image, _ = self._camera.read(self._frame_size)
+            except Exception:
+                continue
+
+            if rgb_image is None:
+                continue
+
+            if self._roi is not None:
+                x, y, w, h = self._roi
+                x = max(0, int(x))
+                y = max(0, int(y))
+                w = max(1, int(w))
+                h = max(1, int(h))
+                max_y = min(y + h, rgb_image.shape[0])
+                max_x = min(x + w, rgb_image.shape[1])
+                rgb_image = rgb_image[y:max_y, x:max_x]
+                if rgb_image.size == 0:
+                    continue
+
+            gray_image = cv2.cvtColor(rgb_image, cv2.COLOR_BGR2GRAY)
+
+            try:
+                self._frame_queue.put_nowait(gray_image)
+            except queue.Full:
+                try:
+                    self._frame_queue.get_nowait()
+                except queue.Empty:
+                    pass
+                try:
+                    self._frame_queue.put_nowait(gray_image)
+                except queue.Full:
+                    continue
+
+    def _processing_loop(self):
+        while not self._stop_event.is_set():
+            try:
+                frame = self._frame_queue.get(timeout=0.1)
+            except queue.Empty:
+                continue
+
+            if frame is None:
+                break
+
+            with self._latest_lock:
+                self._latest_frame = frame
+                self._latest_timestamp = time.time()
+
 
 def gripper_q_robomanip_to_maniskill(q_robomanip):
     """Convert RoboManip gripper position scalar to ManiSkill scale."""
@@ -147,6 +262,14 @@ _JOINT_POSITION_HIGH = torch.tensor(
 
 
 class RolloutPpoCus(RolloutBase):
+    def run(self):
+        try:
+            return super().run()
+        finally:
+            worker = getattr(self, "_marker_worker", None)
+            if worker is not None:
+                worker.stop()
+                self._marker_worker = None
 
     #RolloutMlpにはない、引数関係などの定義(重要度の低い関数)
     def set_additional_args(self, parser):
@@ -181,6 +304,20 @@ class RolloutPpoCus(RolloutBase):
             action=argparse.BooleanOptionalAction,
             default=False,
             help="Measure per-step timings for debugging (default: False).",
+        )
+        parser.add_argument(
+            "--ppo-marker-enable",
+            action=argparse.BooleanOptionalAction,
+            default=False,
+            help="Enable background front-camera marker worker (default: False).",
+        )
+        parser.add_argument(
+            "--ppo-marker-roi",
+            type=int,
+            nargs=4,
+            metavar=("X", "Y", "W", "H"),
+            default=None,
+            help="Optional ROI (pixels) for front camera marker processing.",
         )
 
     def setup_model_meta_info(self):
@@ -314,6 +451,24 @@ class RolloutPpoCus(RolloutBase):
     def setup_variables(self):
         super().setup_variables()
 
+        self._marker_worker = None
+        if getattr(self.args, "ppo_marker_enable", False):
+            env = self.env.unwrapped if hasattr(self.env, "unwrapped") else self.env
+            front_camera = getattr(env, "cameras", {}).get("front")
+            if front_camera is None:
+                print(
+                    f"[{self.__class__.__name__}] front camera not found; marker worker disabled."
+                )
+            else:
+                roi = tuple(self.args.ppo_marker_roi) if self.args.ppo_marker_roi else None
+                self._marker_worker = FrontCameraFrameWorker(
+                    front_camera, roi=roi
+                )
+                self._marker_worker.start()
+                print(
+                    f"[{self.__class__.__name__}] Started front camera marker worker with ROI={roi}."
+                )
+
         self._profile_enabled = bool(getattr(self.args, "ppo_profile", False))
         if self._profile_enabled:
             self._profile_data = defaultdict(list)
@@ -378,6 +533,11 @@ class RolloutPpoCus(RolloutBase):
         self.state_buf = None
         self.images_buf = None
         self.policy_action_buf = None
+
+    def get_latest_marker_frame(self):
+        if getattr(self, "_marker_worker", None) is None:
+            return None, None
+        return self._marker_worker.get_latest_frame()
 
     def get_state(self):
         # Get latest value
