@@ -888,8 +888,9 @@ class RolloutPpoCus(RolloutBase):
                     for state_key in self.state_keys
                 ]
             )
-
         marker_transforms, marker_timestamp = self.get_latest_marker_transforms(poll=True)
+        print(marker_transforms)
+        print("a")
         if marker_transforms:
             ts_str = f"{marker_timestamp:.3f}" if marker_timestamp is not None else "unknown"
             print(
