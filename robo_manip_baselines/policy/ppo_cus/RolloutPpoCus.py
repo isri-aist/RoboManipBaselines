@@ -1,5 +1,6 @@
 import argparse
 import csv
+import inspect
 import json
 import os
 import sys
@@ -9,7 +10,7 @@ from collections import defaultdict
 from pathlib import Path
 import queue
 import threading
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import cv2
 import matplotlib.pylab as plt
@@ -80,29 +81,27 @@ DEFAULT_DETECTOR_SIGMA = 0.3
 DEFAULT_DETECTOR_SHARPENING = 0.1
 
 
-class FrontCameraFrameWorker:
-    """Maintain the latest grayscale frame and AprilTag transforms from the front camera."""
+
+class FrontCameraDetectionWorker:
+    """Process front-camera frames on a background thread to estimate AprilTag poses."""
 
     def __init__(
         self,
-        camera,
         base_to_camera: Optional[np.ndarray],
-        frame_size: Tuple[int, int] = (640, 480),
+        intrinsic_info: Optional[Dict[str, Any]] = None,
         roi: Optional[Tuple[int, int, int, int]] = None,
         tag_size_m: float = DEFAULT_TAG_SIZE_M,
     ):
-        self._camera = camera
-        self._base_to_camera = base_to_camera
-        self._frame_size = frame_size
+        self._base_to_camera = None if base_to_camera is None else base_to_camera.astype(np.float64)
+        self._intrinsic_info: Dict[str, Any] = intrinsic_info or {}
         self._roi = roi
         self._tag_size_m = float(tag_size_m)
-        self._frame_queue = queue.Queue(maxsize=1)
-        self._result_queue = queue.Queue(maxsize=1)
+        self._frame_queue: "queue.Queue[Optional[Tuple[np.ndarray, float]]]" = queue.Queue(maxsize=1)
+        self._result_queue: "queue.Queue[Tuple[float, Dict[int, np.ndarray]]]" = queue.Queue(maxsize=1)
         self._stop_event = threading.Event()
-        self._capture_thread: Optional[threading.Thread] = None
         self._processing_thread: Optional[threading.Thread] = None
         self._latest_lock = threading.Lock()
-        self._latest_frame: Optional[np.ndarray] = None
+        self._latest_gray: Optional[np.ndarray] = None
         self._latest_timestamp: Optional[float] = None
         self._latest_transforms: Dict[int, np.ndarray] = {}
         self._latest_transforms_timestamp: Optional[float] = None
@@ -113,36 +112,37 @@ class FrontCameraFrameWorker:
             build_detector is not None
             and build_homogeneous_transform is not None
             and solve_tag_poses is not None
-            and base_to_camera is not None
+            and self._base_to_camera is not None
         )
 
     def start(self):
-        if self._capture_thread and self._capture_thread.is_alive():
+        if self._processing_thread and self._processing_thread.is_alive():
             return
 
         if not self._detection_available:
             print(
-                "[FrontCameraFrameWorker] Marker detection disabled (missing dependencies or calibration).",
+                "[FrontCameraDetectionWorker] Marker detection disabled (missing dependencies or calibration).",
+                flush=True,
+            )
+
+        detector = self._build_detector()
+        if detector is None:
+            self._detection_available = False
+            print(
+                "[FrontCameraDetectionWorker] Detector initialization failed; detection disabled.",
                 flush=True,
             )
 
         self._stop_event.clear()
-        self._capture_thread = threading.Thread(
-            target=self._capture_loop,
-            name="front_camera_capture",
-            daemon=True,
-        )
         self._processing_thread = threading.Thread(
             target=self._processing_loop,
-            name="front_camera_process",
+            name="front_camera_detection",
             daemon=True,
         )
-        self._capture_thread.start()
         self._processing_thread.start()
 
     def stop(self):
         self._stop_event.set()
-        # Unblock the processing thread if it is waiting on the queue.
         try:
             self._frame_queue.put_nowait(None)
         except queue.Full:
@@ -155,25 +155,58 @@ class FrontCameraFrameWorker:
             except queue.Full:
                 pass
 
-        if self._capture_thread:
-            self._capture_thread.join(timeout=1.0)
-            self._capture_thread = None
         if self._processing_thread:
             self._processing_thread.join(timeout=1.0)
             self._processing_thread = None
 
-        # Drain result queue to avoid stale entries.
         while True:
             try:
                 self._result_queue.get_nowait()
             except queue.Empty:
                 break
 
+    def submit_frame(self, rgb_image: np.ndarray) -> None:
+        if rgb_image is None or self._stop_event.is_set():
+            return
+
+        frame = rgb_image
+        if self._roi is not None:
+            x, y, w, h = self._roi
+            x = max(0, int(x))
+            y = max(0, int(y))
+            w = max(1, int(w))
+            h = max(1, int(h))
+            max_y = min(y + h, frame.shape[0])
+            max_x = min(x + w, frame.shape[1])
+            frame = frame[y:max_y, x:max_x]
+            if frame.size == 0:
+                return
+
+        gray_image = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        timestamp = time.time()
+
+        with self._latest_lock:
+            self._latest_gray = gray_image
+            self._latest_timestamp = timestamp
+
+        payload = (gray_image, timestamp)
+        try:
+            self._frame_queue.put_nowait(payload)
+        except queue.Full:
+            try:
+                self._frame_queue.get_nowait()
+            except queue.Empty:
+                pass
+            try:
+                self._frame_queue.put_nowait(payload)
+            except queue.Full:
+                pass
+
     def get_latest_frame(self) -> Tuple[Optional[np.ndarray], Optional[float]]:
         with self._latest_lock:
-            if self._latest_frame is None:
+            if self._latest_gray is None:
                 return None, None
-            return self._latest_frame.copy(), self._latest_timestamp
+            return self._latest_gray.copy(), self._latest_timestamp
 
     def get_latest_transforms(self) -> Tuple[Dict[int, np.ndarray], Optional[float]]:
         with self._latest_lock:
@@ -194,70 +227,34 @@ class FrontCameraFrameWorker:
             self._latest_transforms_timestamp = timestamp
         return copied, timestamp
 
-    def _capture_loop(self):
-        while not self._stop_event.is_set():
-            try:
-                rgb_image, _ = self._camera.read(self._frame_size)
-            except Exception:
-                continue
-
-            if rgb_image is None:
-                continue
-
-            if self._roi is not None:
-                x, y, w, h = self._roi
-                x = max(0, int(x))
-                y = max(0, int(y))
-                w = max(1, int(w))
-                h = max(1, int(h))
-                max_y = min(y + h, rgb_image.shape[0])
-                max_x = min(x + w, rgb_image.shape[1])
-                rgb_image = rgb_image[y:max_y, x:max_x]
-                if rgb_image.size == 0:
-                    continue
-
-            gray_image = cv2.cvtColor(rgb_image, cv2.COLOR_BGR2GRAY)
-
-            try:
-                self._frame_queue.put_nowait(gray_image)
-            except queue.Full:
-                try:
-                    self._frame_queue.get_nowait()
-                except queue.Empty:
-                    pass
-                try:
-                    self._frame_queue.put_nowait(gray_image)
-                except queue.Full:
-                    continue
-
     def _processing_loop(self):
         while not self._stop_event.is_set():
             try:
-                frame = self._frame_queue.get(timeout=0.1)
+                item = self._frame_queue.get(timeout=0.1)
             except queue.Empty:
                 continue
 
-            if frame is None:
+            if item is None:
                 break
 
-            timestamp = time.time()
+            gray_image, timestamp = item
             transforms: Dict[int, np.ndarray] = {}
 
             if self._detection_available:
-                detector = self._ensure_detector()
-                camera_mats = self._ensure_camera_parameters(frame)
+                detector = self._build_detector()
+                camera_mats = self._ensure_camera_parameters(gray_image)
                 if detector is not None and camera_mats is not None:
                     K, dist_coeffs = camera_mats
                     try:
                         poses = solve_tag_poses(
                             detector,
-                            frame,
+                            gray_image,
                             K,
                             dist_coeffs,
                             self._tag_size_m,
                         )
                     except Exception as exc:  # pragma: no cover - detector failure
-                        print(f"[FrontCameraFrameWorker] solve_tag_poses failed: {exc}", flush=True)
+                        print(f"[FrontCameraDetectionWorker] solve_tag_poses failed: {exc}", flush=True)
                         poses = []
 
                     for pose in poses:
@@ -265,16 +262,13 @@ class FrontCameraFrameWorker:
                             T_cam_to_tag = build_homogeneous_transform(pose.rvec, pose.tvec)
                         except Exception as exc:  # pragma: no cover
                             print(
-                                f"[FrontCameraFrameWorker] Failed to build transform for tag {pose.tag_id}: {exc}",
+                                f"[FrontCameraDetectionWorker] Failed to build transform for tag {pose.tag_id}: {exc}",
                                 flush=True,
                             )
                             continue
-                        T_base_to_tag = self._base_to_camera @ T_cam_to_tag
-                        transforms[int(pose.tag_id)] = T_base_to_tag
+                        transforms[int(pose.tag_id)] = self._base_to_camera @ T_cam_to_tag
 
             with self._latest_lock:
-                self._latest_frame = frame.copy()
-                self._latest_timestamp = timestamp
                 self._latest_transforms = {
                     tag_id: matrix.copy() for tag_id, matrix in transforms.items()
                 }
@@ -296,24 +290,38 @@ class FrontCameraFrameWorker:
                 except queue.Full:
                     pass
 
-    def _ensure_detector(self):
+    def _build_detector(self):
         if self._detector is not None:
             return self._detector
         if build_detector is None:
             return None
+
+        detector_kwargs = {
+            "nthreads": DEFAULT_DETECTOR_THREADS,
+            "quad_decimate": DEFAULT_DETECTOR_DECIMATE,
+            "quad_sigma": DEFAULT_DETECTOR_SIGMA,
+            "refine_edges": True,
+            "decode_sharpening": DEFAULT_DETECTOR_SHARPENING,
+        }
         try:
-            self._detector = build_detector(
-                "tag36h11",
-                nthreads=DEFAULT_DETECTOR_THREADS,
-                quad_decimate=DEFAULT_DETECTOR_DECIMATE,
-                quad_sigma=DEFAULT_DETECTOR_SIGMA,
-                refine_edges=True,
-                decode_sharpening=DEFAULT_DETECTOR_SHARPENING,
-            )
+            sig = inspect.signature(build_detector)
+            accepted = {
+                key: value for key, value in detector_kwargs.items() if key in sig.parameters
+            }
+        except (TypeError, ValueError):  # pragma: no cover - signature introspection failure
+            accepted = detector_kwargs
+
+        try:
+            self._detector = build_detector("tag36h11", **accepted)
+        except TypeError:
+            try:
+                self._detector = build_detector("tag36h11")
+            except Exception as exc:
+                print(f"[FrontCameraDetectionWorker] Failed to build detector: {exc}", flush=True)
+                self._detector = None
         except Exception as exc:  # pragma: no cover - detector creation failure
-            print(f"[FrontCameraFrameWorker] Failed to build detector: {exc}", flush=True)
-            self._detection_available = False
-            return None
+            print(f"[FrontCameraDetectionWorker] Failed to build detector: {exc}", flush=True)
+            self._detector = None
         return self._detector
 
     def _ensure_camera_parameters(
@@ -322,57 +330,15 @@ class FrontCameraFrameWorker:
         if self._camera_matrix is not None and self._dist_coeffs is not None:
             return self._camera_matrix, self._dist_coeffs
 
-        camera_params = self._extract_camera_parameters(frame)
-        if camera_params is None:
-            print(
-                "[FrontCameraFrameWorker] Unable to determine camera intrinsics; disabling detection.",
-                flush=True,
-            )
-            self._detection_available = False
-            return None
-
-        self._camera_matrix, self._dist_coeffs = camera_params
-        return camera_params
-
-    def _extract_camera_parameters(
-        self, frame: np.ndarray
-    ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
         height, width = frame.shape[:2]
-        intr_candidate_attrs = (
-            "color_intrinsics",
-            "intrinsics",
-            "color_intrinsic",
-            "intrinsic",
-        )
-        for attr in intr_candidate_attrs:
-            intr = getattr(self._camera, attr, None)
-            if intr is None:
-                continue
+        info = self._intrinsic_info
+        fx = info.get("fx")
+        fy = info.get("fy")
+        ppx = info.get("ppx")
+        ppy = info.get("ppy")
+        coeffs = info.get("coeffs")
 
-            def _get_intr_value(name: str):
-                if hasattr(intr, name):
-                    return getattr(intr, name)
-                if isinstance(intr, dict):
-                    return intr.get(name)
-                if hasattr(intr, "__getitem__"):
-                    try:
-                        return intr[name]  # type: ignore[index]
-                    except Exception:
-                        return None
-                return None
-
-            fx = _get_intr_value("fx")
-            fy = _get_intr_value("fy")
-            ppx = _get_intr_value("ppx")
-            ppy = _get_intr_value("ppy")
-            coeffs = _get_intr_value("coeffs")
-            if fx is None or fy is None or ppx is None or ppy is None:
-                continue
-            dist_coeffs = (
-                np.array(coeffs[:5], dtype=np.float32)
-                if coeffs is not None
-                else np.zeros(5, dtype=np.float32)
-            )
+        if fx is not None and fy is not None and ppx is not None and ppy is not None:
             K = np.array(
                 [
                     [float(fx), 0.0, float(ppx)],
@@ -381,15 +347,25 @@ class FrontCameraFrameWorker:
                 ],
                 dtype=np.float32,
             )
+            dist_coeffs = (
+                np.array(coeffs[:5], dtype=np.float32)
+                if isinstance(coeffs, (list, tuple, np.ndarray))
+                else np.zeros(5, dtype=np.float32)
+            )
+            self._camera_matrix = K
+            self._dist_coeffs = dist_coeffs
             return K, dist_coeffs
 
-        fovy_deg = getattr(self._camera, "color_fovy", None)
+        fovy_deg = info.get("color_fovy")
+        frame_w = int(info.get("frame_width", width))
+        frame_h = int(info.get("frame_height", height))
         if fovy_deg is not None:
             fovy_rad = np.deg2rad(float(fovy_deg))
-            fy = (height / 2.0) / np.tan(max(1e-6, fovy_rad / 2.0))
-            fx = fy * (width / max(height, 1))
-            cx = width / 2.0
-            cy = height / 2.0
+            fy = (frame_h / 2.0) / np.tan(max(1e-6, fovy_rad / 2.0))
+            fy = float(fy)
+            fx = fy * (frame_w / max(frame_h, 1))
+            cx = frame_w / 2.0
+            cy = frame_h / 2.0
             K = np.array(
                 [
                     [fx, 0.0, cx],
@@ -398,13 +374,14 @@ class FrontCameraFrameWorker:
                 ],
                 dtype=np.float32,
             )
-            return K, np.zeros(5, dtype=np.float32)
+            self._camera_matrix = K
+            self._dist_coeffs = np.zeros(5, dtype=np.float32)
+            return self._camera_matrix, self._dist_coeffs
 
-        # Fallback to a generic pinhole approximation.
-        fx = fy = max(width, height)
-        cx = width / 2.0
-        cy = height / 2.0
-        K = np.array(
+        fx = fy = max(frame_w, frame_h)
+        cx = frame_w / 2.0
+        cy = frame_h / 2.0
+        self._camera_matrix = np.array(
             [
                 [fx, 0.0, cx],
                 [0.0, fy, cy],
@@ -412,9 +389,8 @@ class FrontCameraFrameWorker:
             ],
             dtype=np.float32,
         )
-        return K, np.zeros(5, dtype=np.float32)
-
-
+        self._dist_coeffs = np.zeros(5, dtype=np.float32)
+        return self._camera_matrix, self._dist_coeffs
 def gripper_q_robomanip_to_maniskill(q_robomanip):
     """Convert RoboManip gripper position scalar to ManiSkill scale."""
 
@@ -662,7 +638,11 @@ class RolloutPpoCus(RolloutBase):
         }
 
     def setup_policy(self):
-        if not self.args.ppo_enable_vision:
+        disable_env_vision = (
+            not self.args.ppo_enable_vision
+            and not getattr(self.args, "ppo_marker_enable", False)
+        )
+        if disable_env_vision:
             self._disable_env_vision()
 
         # Print policy information
@@ -758,10 +738,10 @@ class RolloutPpoCus(RolloutBase):
                         if self.args.ppo_marker_roi
                         else None
                     )
-                    self._marker_worker = FrontCameraFrameWorker(
-                        front_camera,
+                    intrinsic_info = self._extract_camera_intrinsic_info(front_camera)
+                    self._marker_worker = FrontCameraDetectionWorker(
                         base_to_camera=_GLOBAL_T_BASE_TO_CAMERA,
-                        frame_size=(640, 480),
+                        intrinsic_info=intrinsic_info,
                         roi=roi,
                         tag_size_m=DEFAULT_TAG_SIZE_M,
                     )
@@ -775,6 +755,67 @@ class RolloutPpoCus(RolloutBase):
         if self._profile_enabled:
             self._profile_data = defaultdict(list)
             self._wrap_profile_hooks()
+
+    def _extract_camera_intrinsic_info(self, camera) -> Optional[Dict[str, Any]]:
+        if camera is None:
+            return None
+
+        info: Dict[str, Any] = {}
+        candidate_attrs = (
+            "color_intrinsics",
+            "intrinsics",
+            "color_intrinsic",
+            "intrinsic",
+        )
+        for attr in candidate_attrs:
+            intr = getattr(camera, attr, None)
+            if intr is None:
+                continue
+
+            def _get_value(name: str):
+                if hasattr(intr, name):
+                    return getattr(intr, name)
+                if isinstance(intr, dict):
+                    return intr.get(name)
+                if hasattr(intr, "__getitem__"):
+                    try:
+                        return intr[name]
+                    except Exception:
+                        return None
+                return None
+
+            fx = _get_value("fx")
+            fy = _get_value("fy")
+            ppx = _get_value("ppx")
+            ppy = _get_value("ppy")
+            coeffs = _get_value("coeffs")
+
+            if fx is not None:
+                info["fx"] = float(fx)
+            if fy is not None:
+                info["fy"] = float(fy)
+            if ppx is not None:
+                info["ppx"] = float(ppx)
+            if ppy is not None:
+                info["ppy"] = float(ppy)
+            if coeffs is not None:
+                info["coeffs"] = list(coeffs) if not isinstance(coeffs, list) else coeffs
+
+            if info:
+                break
+
+        color_fovy = getattr(camera, "color_fovy", None)
+        if color_fovy is not None:
+            info["color_fovy"] = float(color_fovy)
+
+        frame_width = getattr(camera, "color_width", None) or getattr(camera, "width", None)
+        frame_height = getattr(camera, "color_height", None) or getattr(camera, "height", None)
+        if frame_width is not None:
+            info["frame_width"] = int(frame_width)
+        if frame_height is not None:
+            info["frame_height"] = int(frame_height)
+
+        return info if info else None
 
     def _disable_env_vision(self):
         env = self.env.unwrapped if hasattr(self.env, "unwrapped") else self.env
@@ -924,11 +965,28 @@ class RolloutPpoCus(RolloutBase):
         if len(self.camera_names) == 0:
             return None
 
+        if (
+            self._marker_worker is not None
+            and "front" not in self.camera_names
+        ):
+            front_rgb = (
+                self.info.get("rgb_images", {}).get("front")
+                if isinstance(self.info, dict)
+                else None
+            )
+            if front_rgb is not None:
+                self._marker_worker.submit_frame(front_rgb.copy())
+
         images = []
         for camera_name in self.camera_names:
-            image = self.info["rgb_images"][camera_name]
+            rgb_image = self.info["rgb_images"][camera_name]
+            if (
+                self._marker_worker is not None
+                and camera_name == "front"
+            ):
+                self._marker_worker.submit_frame(rgb_image.copy())
 
-            image = np.moveaxis(image, -1, -3)
+            image = np.moveaxis(rgb_image, -1, -3)
             image = torch.tensor(image.copy(), dtype=torch.uint8)
             image = self.image_transforms(image)
 
