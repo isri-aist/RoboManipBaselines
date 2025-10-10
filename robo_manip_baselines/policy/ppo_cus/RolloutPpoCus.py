@@ -267,6 +267,8 @@ class FrontCameraDetectionWorker:
                         self._last_detection_count = len(poses)
 
                     for pose in poses:
+                        if int(pose.tag_id) == 3:
+                            continue
                         try:
                             T_cam_to_tag = build_homogeneous_transform(pose.rvec, pose.tvec)
                         except Exception as exc:  # pragma: no cover
