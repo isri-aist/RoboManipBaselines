@@ -10,7 +10,7 @@ from typing import Optional
 import cv2
 import numpy as np
 
-from external.check_AprilTag.src.pose_viewer import (
+from pose_viewer import (
     T_BASE_TAG_TO_BASE_DEFAULT,
     build_detector,
     report_base_tag_transform,
