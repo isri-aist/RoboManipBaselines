@@ -114,6 +114,8 @@ class FrontCameraDetectionWorker:
             and solve_tag_poses is not None
             and self._base_to_camera is not None
         )
+        self._frame_counter = 0
+        self._last_detection_count = None
 
     def start(self):
         if self._processing_thread and self._processing_thread.is_alive():
@@ -201,6 +203,7 @@ class FrontCameraDetectionWorker:
                 self._frame_queue.put_nowait(payload)
             except queue.Full:
                 pass
+        self._frame_counter += 1
 
     def get_latest_frame(self) -> Tuple[Optional[np.ndarray], Optional[float]]:
         with self._latest_lock:
@@ -256,6 +259,12 @@ class FrontCameraDetectionWorker:
                     except Exception as exc:  # pragma: no cover - detector failure
                         print(f"[FrontCameraDetectionWorker] solve_tag_poses failed: {exc}", flush=True)
                         poses = []
+                    if self._last_detection_count != len(poses):
+                        print(
+                            f"[FrontCameraDetectionWorker] frame#{self._frame_counter} detected {len(poses)} tags.",
+                            flush=True,
+                        )
+                        self._last_detection_count = len(poses)
 
                     for pose in poses:
                         try:
@@ -322,6 +331,12 @@ class FrontCameraDetectionWorker:
         except Exception as exc:  # pragma: no cover - detector creation failure
             print(f"[FrontCameraDetectionWorker] Failed to build detector: {exc}", flush=True)
             self._detector = None
+        else:
+            if self._detector is not None:
+                print(
+                    f"[FrontCameraDetectionWorker] Detector initialized with kwargs={accepted}.",
+                    flush=True,
+                )
         return self._detector
 
     def _ensure_camera_parameters(
