@@ -2,11 +2,14 @@ import argparse
 import csv
 import json
 import os
+import sys
 import time
 import types
 from collections import defaultdict
+from pathlib import Path
 import queue
 import threading
+from typing import Dict, Optional, Tuple
 
 import cv2
 import matplotlib.pylab as plt
@@ -23,24 +26,105 @@ from robo_manip_baselines.common import (
 )
 
 
-class FrontCameraFrameWorker:
-    """Maintain the latest grayscale frame from the front camera using background threads."""
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_APRILTAG_SRC = _REPO_ROOT / "external" / "check_AprilTag" / "src"
+if _APRILTAG_SRC.exists():
+    apriltag_src_str = str(_APRILTAG_SRC)
+    if apriltag_src_str not in sys.path:
+        sys.path.append(apriltag_src_str)
 
-    def __init__(self, camera, frame_size=(640, 480), roi=None):
+try:
+    from pose_viewer import (
+        build_detector,
+        build_homogeneous_transform,
+        solve_tag_poses,
+    )
+except ImportError:  # pragma: no cover - optional dependency
+    build_detector = None  # type: ignore[assignment]
+    build_homogeneous_transform = None  # type: ignore[assignment]
+    solve_tag_poses = None  # type: ignore[assignment]
+
+
+_DEFAULT_T_BASE_TO_CAMERA_PATH = (
+    _REPO_ROOT / "robo_manip_baselines" / "calib" / "T_base_to_camera.csv"
+)
+
+
+def _load_base_to_camera_transform(path: Path) -> Optional[np.ndarray]:
+    try:
+        matrix = np.loadtxt(path, delimiter=",", dtype=np.float64)
+    except FileNotFoundError:
+        print(
+            f"[RolloutPpoCus] T_base→camera transform not found at {path}. "
+            "Marker detection will be disabled.",
+            flush=True,
+        )
+        return None
+    except Exception as exc:  # pragma: no cover - I/O error
+        print(
+            f"[RolloutPpoCus] Failed to load T_base→camera transform from {path}: {exc}",
+            flush=True,
+        )
+        return None
+
+    matrix = matrix.reshape(4, 4)
+    return matrix.astype(np.float64)
+
+
+_GLOBAL_T_BASE_TO_CAMERA = _load_base_to_camera_transform(_DEFAULT_T_BASE_TO_CAMERA_PATH)
+
+DEFAULT_TAG_SIZE_M = 0.0309
+DEFAULT_DETECTOR_THREADS = 4
+DEFAULT_DETECTOR_DECIMATE = 1.0
+DEFAULT_DETECTOR_SIGMA = 0.3
+DEFAULT_DETECTOR_SHARPENING = 0.1
+
+
+class FrontCameraFrameWorker:
+    """Maintain the latest grayscale frame and AprilTag transforms from the front camera."""
+
+    def __init__(
+        self,
+        camera,
+        base_to_camera: Optional[np.ndarray],
+        frame_size: Tuple[int, int] = (640, 480),
+        roi: Optional[Tuple[int, int, int, int]] = None,
+        tag_size_m: float = DEFAULT_TAG_SIZE_M,
+    ):
         self._camera = camera
+        self._base_to_camera = base_to_camera
         self._frame_size = frame_size
         self._roi = roi
+        self._tag_size_m = float(tag_size_m)
         self._frame_queue = queue.Queue(maxsize=1)
+        self._result_queue = queue.Queue(maxsize=1)
         self._stop_event = threading.Event()
-        self._capture_thread = None
-        self._processing_thread = None
+        self._capture_thread: Optional[threading.Thread] = None
+        self._processing_thread: Optional[threading.Thread] = None
         self._latest_lock = threading.Lock()
-        self._latest_frame = None
-        self._latest_timestamp = None
+        self._latest_frame: Optional[np.ndarray] = None
+        self._latest_timestamp: Optional[float] = None
+        self._latest_transforms: Dict[int, np.ndarray] = {}
+        self._latest_transforms_timestamp: Optional[float] = None
+        self._detector = None
+        self._camera_matrix: Optional[np.ndarray] = None
+        self._dist_coeffs: Optional[np.ndarray] = None
+        self._detection_available = (
+            build_detector is not None
+            and build_homogeneous_transform is not None
+            and solve_tag_poses is not None
+            and base_to_camera is not None
+        )
 
     def start(self):
         if self._capture_thread and self._capture_thread.is_alive():
             return
+
+        if not self._detection_available:
+            print(
+                "[FrontCameraFrameWorker] Marker detection disabled (missing dependencies or calibration).",
+                flush=True,
+            )
 
         self._stop_event.clear()
         self._capture_thread = threading.Thread(
@@ -78,11 +162,37 @@ class FrontCameraFrameWorker:
             self._processing_thread.join(timeout=1.0)
             self._processing_thread = None
 
-    def get_latest_frame(self):
+        # Drain result queue to avoid stale entries.
+        while True:
+            try:
+                self._result_queue.get_nowait()
+            except queue.Empty:
+                break
+
+    def get_latest_frame(self) -> Tuple[Optional[np.ndarray], Optional[float]]:
         with self._latest_lock:
             if self._latest_frame is None:
                 return None, None
             return self._latest_frame.copy(), self._latest_timestamp
+
+    def get_latest_transforms(self) -> Tuple[Dict[int, np.ndarray], Optional[float]]:
+        with self._latest_lock:
+            return (
+                {tag_id: matrix.copy() for tag_id, matrix in self._latest_transforms.items()},
+                self._latest_transforms_timestamp,
+            )
+
+    def poll_transforms(self) -> Tuple[Optional[Dict[int, np.ndarray]], Optional[float]]:
+        try:
+            timestamp, transforms = self._result_queue.get_nowait()
+        except queue.Empty:
+            return None, None
+
+        copied = {tag_id: matrix.copy() for tag_id, matrix in transforms.items()}
+        with self._latest_lock:
+            self._latest_transforms = copied
+            self._latest_transforms_timestamp = timestamp
+        return copied, timestamp
 
     def _capture_loop(self):
         while not self._stop_event.is_set():
@@ -130,9 +240,179 @@ class FrontCameraFrameWorker:
             if frame is None:
                 break
 
+            timestamp = time.time()
+            transforms: Dict[int, np.ndarray] = {}
+
+            if self._detection_available:
+                detector = self._ensure_detector()
+                camera_mats = self._ensure_camera_parameters(frame)
+                if detector is not None and camera_mats is not None:
+                    K, dist_coeffs = camera_mats
+                    try:
+                        poses = solve_tag_poses(
+                            detector,
+                            frame,
+                            K,
+                            dist_coeffs,
+                            self._tag_size_m,
+                        )
+                    except Exception as exc:  # pragma: no cover - detector failure
+                        print(f"[FrontCameraFrameWorker] solve_tag_poses failed: {exc}", flush=True)
+                        poses = []
+
+                    for pose in poses:
+                        try:
+                            T_cam_to_tag = build_homogeneous_transform(pose.rvec, pose.tvec)
+                        except Exception as exc:  # pragma: no cover
+                            print(
+                                f"[FrontCameraFrameWorker] Failed to build transform for tag {pose.tag_id}: {exc}",
+                                flush=True,
+                            )
+                            continue
+                        T_base_to_tag = self._base_to_camera @ T_cam_to_tag
+                        transforms[int(pose.tag_id)] = T_base_to_tag
+
             with self._latest_lock:
-                self._latest_frame = frame
-                self._latest_timestamp = time.time()
+                self._latest_frame = frame.copy()
+                self._latest_timestamp = timestamp
+                self._latest_transforms = {
+                    tag_id: matrix.copy() for tag_id, matrix in transforms.items()
+                }
+                self._latest_transforms_timestamp = timestamp
+
+            payload = (
+                timestamp,
+                {tag_id: matrix.copy() for tag_id, matrix in transforms.items()},
+            )
+            try:
+                self._result_queue.put_nowait(payload)
+            except queue.Full:
+                try:
+                    self._result_queue.get_nowait()
+                except queue.Empty:
+                    pass
+                try:
+                    self._result_queue.put_nowait(payload)
+                except queue.Full:
+                    pass
+
+    def _ensure_detector(self):
+        if self._detector is not None:
+            return self._detector
+        if build_detector is None:
+            return None
+        try:
+            self._detector = build_detector(
+                "tag36h11",
+                nthreads=DEFAULT_DETECTOR_THREADS,
+                quad_decimate=DEFAULT_DETECTOR_DECIMATE,
+                quad_sigma=DEFAULT_DETECTOR_SIGMA,
+                refine_edges=True,
+                decode_sharpening=DEFAULT_DETECTOR_SHARPENING,
+            )
+        except Exception as exc:  # pragma: no cover - detector creation failure
+            print(f"[FrontCameraFrameWorker] Failed to build detector: {exc}", flush=True)
+            self._detection_available = False
+            return None
+        return self._detector
+
+    def _ensure_camera_parameters(
+        self, frame: np.ndarray
+    ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
+        if self._camera_matrix is not None and self._dist_coeffs is not None:
+            return self._camera_matrix, self._dist_coeffs
+
+        camera_params = self._extract_camera_parameters(frame)
+        if camera_params is None:
+            print(
+                "[FrontCameraFrameWorker] Unable to determine camera intrinsics; disabling detection.",
+                flush=True,
+            )
+            self._detection_available = False
+            return None
+
+        self._camera_matrix, self._dist_coeffs = camera_params
+        return camera_params
+
+    def _extract_camera_parameters(
+        self, frame: np.ndarray
+    ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
+        height, width = frame.shape[:2]
+        intr_candidate_attrs = (
+            "color_intrinsics",
+            "intrinsics",
+            "color_intrinsic",
+            "intrinsic",
+        )
+        for attr in intr_candidate_attrs:
+            intr = getattr(self._camera, attr, None)
+            if intr is None:
+                continue
+
+            def _get_intr_value(name: str):
+                if hasattr(intr, name):
+                    return getattr(intr, name)
+                if isinstance(intr, dict):
+                    return intr.get(name)
+                if hasattr(intr, "__getitem__"):
+                    try:
+                        return intr[name]  # type: ignore[index]
+                    except Exception:
+                        return None
+                return None
+
+            fx = _get_intr_value("fx")
+            fy = _get_intr_value("fy")
+            ppx = _get_intr_value("ppx")
+            ppy = _get_intr_value("ppy")
+            coeffs = _get_intr_value("coeffs")
+            if fx is None or fy is None or ppx is None or ppy is None:
+                continue
+            dist_coeffs = (
+                np.array(coeffs[:5], dtype=np.float32)
+                if coeffs is not None
+                else np.zeros(5, dtype=np.float32)
+            )
+            K = np.array(
+                [
+                    [float(fx), 0.0, float(ppx)],
+                    [0.0, float(fy), float(ppy)],
+                    [0.0, 0.0, 1.0],
+                ],
+                dtype=np.float32,
+            )
+            return K, dist_coeffs
+
+        fovy_deg = getattr(self._camera, "color_fovy", None)
+        if fovy_deg is not None:
+            fovy_rad = np.deg2rad(float(fovy_deg))
+            fy = (height / 2.0) / np.tan(max(1e-6, fovy_rad / 2.0))
+            fx = fy * (width / max(height, 1))
+            cx = width / 2.0
+            cy = height / 2.0
+            K = np.array(
+                [
+                    [fx, 0.0, cx],
+                    [0.0, fy, cy],
+                    [0.0, 0.0, 1.0],
+                ],
+                dtype=np.float32,
+            )
+            return K, np.zeros(5, dtype=np.float32)
+
+        # Fallback to a generic pinhole approximation.
+        fx = fy = max(width, height)
+        cx = width / 2.0
+        cy = height / 2.0
+        K = np.array(
+            [
+                [fx, 0.0, cx],
+                [0.0, fy, cy],
+                [0.0, 0.0, 1.0],
+            ],
+            dtype=np.float32,
+        )
+        return K, np.zeros(5, dtype=np.float32)
 
 
 def gripper_q_robomanip_to_maniskill(q_robomanip):
@@ -453,21 +733,37 @@ class RolloutPpoCus(RolloutBase):
 
         self._marker_worker = None
         if getattr(self.args, "ppo_marker_enable", False):
-            env = self.env.unwrapped if hasattr(self.env, "unwrapped") else self.env
-            front_camera = getattr(env, "cameras", {}).get("front")
-            if front_camera is None:
+            if _GLOBAL_T_BASE_TO_CAMERA is None:
                 print(
-                    f"[{self.__class__.__name__}] front camera not found; marker worker disabled."
+                    f"[{self.__class__.__name__}] T_base→camera calibration not loaded; marker worker disabled.",
+                    flush=True,
                 )
             else:
-                roi = tuple(self.args.ppo_marker_roi) if self.args.ppo_marker_roi else None
-                self._marker_worker = FrontCameraFrameWorker(
-                    front_camera, roi=roi
-                )
-                self._marker_worker.start()
-                print(
-                    f"[{self.__class__.__name__}] Started front camera marker worker with ROI={roi}."
-                )
+                env = self.env.unwrapped if hasattr(self.env, "unwrapped") else self.env
+                front_camera = getattr(env, "cameras", {}).get("front")
+                if front_camera is None:
+                    print(
+                        f"[{self.__class__.__name__}] front camera not found; marker worker disabled.",
+                        flush=True,
+                    )
+                else:
+                    roi = (
+                        tuple(int(v) for v in self.args.ppo_marker_roi)
+                        if self.args.ppo_marker_roi
+                        else None
+                    )
+                    self._marker_worker = FrontCameraFrameWorker(
+                        front_camera,
+                        base_to_camera=_GLOBAL_T_BASE_TO_CAMERA,
+                        frame_size=(640, 480),
+                        roi=roi,
+                        tag_size_m=DEFAULT_TAG_SIZE_M,
+                    )
+                    self._marker_worker.start()
+                    print(
+                        f"[{self.__class__.__name__}] Started front camera marker worker with ROI={roi}.",
+                        flush=True,
+                    )
 
         self._profile_enabled = bool(getattr(self.args, "ppo_profile", False))
         if self._profile_enabled:
@@ -538,6 +834,16 @@ class RolloutPpoCus(RolloutBase):
         if getattr(self, "_marker_worker", None) is None:
             return None, None
         return self._marker_worker.get_latest_frame()
+
+    def get_latest_marker_transforms(self, poll: bool = False):
+        worker = getattr(self, "_marker_worker", None)
+        if worker is None:
+            return None, None
+        if poll:
+            transforms, timestamp = worker.poll_transforms()
+            if transforms is not None:
+                return transforms, timestamp
+        return worker.get_latest_transforms()
 
     def get_state(self):
         # Get latest value
