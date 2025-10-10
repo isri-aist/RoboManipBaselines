@@ -20,7 +20,7 @@ from pose_viewer import (
 )
 
 T_BASE_TO_BASE_TAG_DEFAULT = np.linalg.inv(T_BASE_TAG_TO_BASE_DEFAULT)
-DEFAULT_OUTPUT_PATH = Path(__file__).resolve().parent / "calib" / "T_base_to_camera.csv"
+DEFAULT_OUTPUT_PATH = Path(__file__).resolve().parents[1] / "calib" / "T_base_to_camera.csv"
 
 
 def save_transform(matrix: np.ndarray, path: Path) -> None:
