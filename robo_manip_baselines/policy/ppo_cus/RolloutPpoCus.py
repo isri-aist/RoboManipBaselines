@@ -588,8 +588,8 @@ class RolloutPpoCus(RolloutBase):
         parser.add_argument(
             "--ppo-marker-enable",
             action=argparse.BooleanOptionalAction,
-            default=False,
-            help="Enable background front-camera marker worker (default: False).",
+            default=True,
+            help="Enable background front-camera marker worker (default: True, disable with --no-ppo-marker-enable).",
         )
         parser.add_argument(
             "--ppo-marker-roi",
