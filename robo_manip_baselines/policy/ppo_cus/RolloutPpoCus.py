@@ -756,6 +756,20 @@ class RolloutPpoCus(RolloutBase):
             self._profile_data = defaultdict(list)
             self._wrap_profile_hooks()
 
+    def _submit_marker_frame(self) -> bool:
+        if getattr(self, "_marker_worker", None) is None:
+            return False
+        if not isinstance(getattr(self, "info", None), dict):
+            return False
+        rgb_images = self.info.get("rgb_images")
+        if not isinstance(rgb_images, dict):
+            return False
+        front_rgb = rgb_images.get("front")
+        if front_rgb is None:
+            return False
+        self._marker_worker.submit_frame(front_rgb.copy())
+        return True
+
     def _extract_camera_intrinsic_info(self, camera) -> Optional[Dict[str, Any]]:
         if camera is None:
             return None
@@ -962,20 +976,10 @@ class RolloutPpoCus(RolloutBase):
 
     def get_images(self):
         # Get latest value
+        self._submit_marker_frame()
+
         if len(self.camera_names) == 0:
             return None
-
-        if (
-            self._marker_worker is not None
-            and "front" not in self.camera_names
-        ):
-            front_rgb = (
-                self.info.get("rgb_images", {}).get("front")
-                if isinstance(self.info, dict)
-                else None
-            )
-            if front_rgb is not None:
-                self._marker_worker.submit_frame(front_rgb.copy())
 
         images = []
         for camera_name in self.camera_names:
@@ -1021,6 +1025,7 @@ class RolloutPpoCus(RolloutBase):
                 total_start = timer()
                 state_start = timer()
 
+            self._submit_marker_frame()
             self.get_state()  # update buffers and logs
 
             if profile_enabled:
