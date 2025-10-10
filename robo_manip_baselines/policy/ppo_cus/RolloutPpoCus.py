@@ -742,6 +742,12 @@ class RolloutPpoCus(RolloutBase):
                 env = self.env.unwrapped if hasattr(self.env, "unwrapped") else self.env
                 front_camera = getattr(env, "cameras", {}).get("front")
                 if front_camera is None:
+                    vision_backup = getattr(self, "_vision_backup", None)
+                    if isinstance(vision_backup, dict):
+                        backup_cameras = vision_backup.get("cameras")
+                        if isinstance(backup_cameras, dict):
+                            front_camera = backup_cameras.get("front")
+                if front_camera is None:
                     print(
                         f"[{self.__class__.__name__}] front camera not found; marker worker disabled.",
                         flush=True,
