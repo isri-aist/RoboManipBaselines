@@ -40,4 +40,4 @@ Ppo
 python ./bin/Rollout.py Ppo RealXarm7Demo --wait_before_start --skip_draw 50 --save_rollout --config ./envs/configs/RealXarm7DemoEnv.yaml --checkpoint final_ckpt.pt 
 
 Ppo_cus
-python ./bin/Rollout.py PpoCus RealXarm7Demo --wait_before_start --skip_draw 50 --ppo-marker-enable --save_rollout --config ./envs/configs/RealXarm7DemoEnv.yaml --checkpoint final_ckpt.pt
+python ./bin/Rollout.py PpoCus RealXarm7Demo --wait_before_start --skip_draw 50 --ppo-marker-enable --ppo-enable-vision --save_rollout --config ./envs/configs/RealXarm7DemoEnv.yaml --checkpoint final_ckpt.pt
