@@ -12,6 +12,7 @@ class RolloutMain:
     policy_parent_module_str = "robo_manip_baselines.policy"
     policy_choices = [
         "Ppo",
+        "PpoCus",
         "Mlp",
         "Sarnn",
         "Act",
