@@ -395,15 +395,16 @@ class RolloutPpo(RolloutBase):
         qvel = self.motion_manager.get_data(DataKey.MEASURED_JOINT_VEL, self.obs)
         target_qpos = np.array(
             [
-                -0.00451699561347621,
-                -0.4779577590016519,
-                -0.0059982858387227518,
-                0.8576097778375098,
-                -0.032158957391327556,
-                1.27989111575085,
-                0.05005294852914137,
-                830,
+                0.0,
+                -0.477,
+                0.0,
+                0.8571976,
+                0.0,
+                1.2771976,
+                -1.5707964,
+                40,
             ],
+         
             dtype=np.float32,
         )
         qpos_ms = qpos.astype(np.float32).copy()
