@@ -123,7 +123,6 @@ class FrontCameraDetectionWorker:
 
         if not self._detection_available:
             print(
-                "[FrontCameraDetectionWorker] Marker detection disabled (missing dependencies or calibration).",
                 flush=True,
             )
 
@@ -131,7 +130,6 @@ class FrontCameraDetectionWorker:
         if detector is None:
             self._detection_available = False
             print(
-                "[FrontCameraDetectionWorker] Detector initialization failed; detection disabled.",
                 flush=True,
             )
 
@@ -257,11 +255,9 @@ class FrontCameraDetectionWorker:
                             self._tag_size_m,
                         )
                     except Exception as exc:  # pragma: no cover - detector failure
-                        print(f"[FrontCameraDetectionWorker] solve_tag_poses failed: {exc}", flush=True)
                         poses = []
                     if self._last_detection_count != len(poses):
                         print(
-                            f"[FrontCameraDetectionWorker] frame#{self._frame_counter} detected {len(poses)} tags.",
                             flush=True,
                         )
                         self._last_detection_count = len(poses)
@@ -273,7 +269,6 @@ class FrontCameraDetectionWorker:
                             T_cam_to_tag = build_homogeneous_transform(pose.rvec, pose.tvec)
                         except Exception as exc:  # pragma: no cover
                             print(
-                                f"[FrontCameraDetectionWorker] Failed to build transform for tag {pose.tag_id}: {exc}",
                                 flush=True,
                             )
                             continue
@@ -284,7 +279,6 @@ class FrontCameraDetectionWorker:
                             formatter={"float_kind": lambda x: f"{x: .4f}"},
                         )
                         print(
-                            f"[FrontCameraDetectionWorker] tag {pose.tag_id} transform:\n{matrix_str}",
                             flush=True,
                         )
 
@@ -337,15 +331,12 @@ class FrontCameraDetectionWorker:
             try:
                 self._detector = build_detector("tag36h11")
             except Exception as exc:
-                print(f"[FrontCameraDetectionWorker] Failed to build detector: {exc}", flush=True)
                 self._detector = None
         except Exception as exc:  # pragma: no cover - detector creation failure
-            print(f"[FrontCameraDetectionWorker] Failed to build detector: {exc}", flush=True)
             self._detector = None
         else:
             if self._detector is not None:
                 print(
-                    f"[FrontCameraDetectionWorker] Detector initialized with kwargs={accepted}.",
                     flush=True,
                 )
         return self._detector
@@ -947,7 +938,10 @@ class RolloutPpoCus(RolloutBase):
         marker_transforms, marker_timestamp = self.get_latest_marker_transforms(poll=True)
         if marker_transforms:
             ts_str = f"{marker_timestamp:.3f}" if marker_timestamp is not None else "unknown"
-            print(f"[{self.__class__.__name__}] Latest marker transforms (t={ts_str}):", flush=True)
+            print(
+                f"[{self.__class__.__name__}] Latest marker transforms (t={ts_str}, detected={len(marker_transforms)}):",
+                flush=True,
+            )
             for tag_id, T in marker_transforms.items():
                 matrix_str = np.array2string(
                     T,
