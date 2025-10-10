@@ -38,3 +38,6 @@ python ./bin/Rollout.py Mlp RealXarm7Demo --config ./envs/configs/RealXarm7DemoE
 
 Ppo
 python ./bin/Rollout.py Ppo RealXarm7Demo --wait_before_start --skip_draw 50 --save_rollout --config ./envs/configs/RealXarm7DemoEnv.yaml --checkpoint final_ckpt.pt 
+
+Ppo_cus
+python ./bin/Rollout.py PpoCus RealXarm7Demo --wait_before_start --skip_draw 50 --save_rollout --config ./envs/configs/RealXarm7DemoEnv.yaml --checkpoint final_ckpt.pt
