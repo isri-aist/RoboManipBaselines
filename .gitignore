@@ -17,3 +17,5 @@ GTAGS
 
 *.pt
 
+.venv
+
