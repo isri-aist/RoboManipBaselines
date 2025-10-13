@@ -1,5 +1,6 @@
 import argparse
 import csv
+import importlib
 import inspect
 import json
 import os
@@ -10,7 +11,7 @@ from collections import defaultdict
 from pathlib import Path
 import queue
 import threading
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, List
 
 import cv2
 import matplotlib.pylab as plt
@@ -79,6 +80,20 @@ DEFAULT_DETECTOR_THREADS = 4
 DEFAULT_DETECTOR_DECIMATE = 1.0
 DEFAULT_DETECTOR_SIGMA = 0.3
 DEFAULT_DETECTOR_SHARPENING = 0.1
+
+DEFAULT_TARGET_JOINT_POS = np.array(
+    [
+        0.0,
+        -0.477,
+        0.0,
+        0.8571976,
+        0.0,
+        1.2771976,
+        -1.5707964,
+        40.0,
+    ],
+    dtype=np.float32,
+)
 
 
 
@@ -572,6 +587,113 @@ class RolloutPpoCus(RolloutBase):
             )
 
         super().setup_model_meta_info()
+        self.extra_state_keys: list[str] = []
+        self.extra_state_dims: Dict[str, int] = {}
+        self.ppo_task_handler = None
+        self.default_target_joint_pos = DEFAULT_TARGET_JOINT_POS.copy()
+        self.marker_camera_names: List[str] = ["front"]
+        self._marker_camera_active: Optional[str] = None
+        self._setup_ppo_task_from_meta()
+
+    def _setup_ppo_task_from_meta(self) -> None:
+        self.standard_state_keys = list(self.state_keys)
+
+        ppo_task_cfg = self.model_meta_info.get("ppo_task")
+        if not ppo_task_cfg:
+            return
+
+        extra_keys_cfg = ppo_task_cfg.get("extra_keys", [])
+        if not isinstance(extra_keys_cfg, list):
+            raise TypeError(
+                f"[{self.__class__.__name__}] 'ppo_task.extra_keys' must be a list."
+            )
+
+        extra_state_keys: list[str] = []
+        extra_state_dims: Dict[str, int] = {}
+        for entry in extra_keys_cfg:
+            if not isinstance(entry, dict):
+                raise TypeError(
+                    f"[{self.__class__.__name__}] 'ppo_task.extra_keys' entries must be objects."
+                )
+            name = entry.get("name")
+            dim = entry.get("dim")
+            if not name or not isinstance(name, str):
+                raise ValueError(
+                    f"[{self.__class__.__name__}] Invalid extra key name: {entry}"
+                )
+            if name in extra_state_keys:
+                raise ValueError(
+                    f"[{self.__class__.__name__}] Duplicate extra key detected: {name}"
+                )
+            if dim is None:
+                raise ValueError(
+                    f"[{self.__class__.__name__}] Missing dimension for extra key '{name}'."
+                )
+            dim_int = int(dim)
+            if dim_int <= 0:
+                raise ValueError(
+                    f"[{self.__class__.__name__}] Dimension for extra key '{name}' must be positive."
+                )
+            extra_state_keys.append(name)
+            extra_state_dims[name] = dim_int
+
+        missing_in_state = [key for key in extra_state_keys if key not in self.state_keys]
+        if missing_in_state:
+            raise ValueError(
+                f"[{self.__class__.__name__}] Extra state keys {missing_in_state} "
+                "are not present in model_meta_info['state']['keys']."
+            )
+
+        module_path = ppo_task_cfg.get("module")
+        if not module_path or not isinstance(module_path, str):
+            raise ValueError(
+                f"[{self.__class__.__name__}] 'ppo_task.module' must be a non-empty string."
+            )
+
+        try:
+            task_module = importlib.import_module(module_path)
+        except ModuleNotFoundError as exc:
+            raise ModuleNotFoundError(
+                f"[{self.__class__.__name__}] Failed to import PPO task module '{module_path}'."
+            ) from exc
+
+        builder = getattr(task_module, "build_ppo_task", None)
+        if builder is None:
+            raise AttributeError(
+                f"[{self.__class__.__name__}] Module '{module_path}' does not expose a 'build_ppo_task' function."
+            )
+
+        params = ppo_task_cfg.get("params") or {}
+        if not isinstance(params, dict):
+            raise TypeError(
+                f"[{self.__class__.__name__}] 'ppo_task.params' must be a dictionary."
+            )
+
+        self.ppo_task_handler = builder(self, params)
+        if self.ppo_task_handler is None:
+            raise RuntimeError(
+                f"[{self.__class__.__name__}] Task builder '{module_path}.build_ppo_task' returned None."
+            )
+
+        marker_cameras = ppo_task_cfg.get("marker_cameras", [])
+        if isinstance(marker_cameras, list):
+            self.marker_camera_names = [str(name) for name in marker_cameras]
+        elif marker_cameras:
+            raise TypeError(
+                f"[{self.__class__.__name__}] 'ppo_task.marker_cameras' must be a list of camera names."
+            )
+
+        self.extra_state_keys = extra_state_keys
+        self.extra_state_dims = extra_state_dims
+        self.standard_state_keys = [
+            key for key in self.state_keys if key not in self.extra_state_keys
+        ]
+
+        task_name = ppo_task_cfg.get("name") or module_path
+        print(
+            f"[{self.__class__.__name__}] Loaded PPO task '{task_name}'. "
+            f"Extra state keys: {self.extra_state_keys}"
+        )
 
     def setup_policy(self):
         # Always keep vision enabled for marker detection
@@ -642,35 +764,57 @@ class RolloutPpoCus(RolloutBase):
         super().setup_variables()
 
         self._marker_worker = None
+        self._marker_camera_active = None
         if _GLOBAL_T_BASE_TO_CAMERA is None:
             print(
                 f"[{self.__class__.__name__}] T_base→camera calibration not loaded; marker worker disabled.",
                 flush=True,
             )
         else:
-                env = self.env.unwrapped if hasattr(self.env, "unwrapped") else self.env
-                front_camera = getattr(env, "cameras", {}).get("front")
-                if front_camera is None:
-                    vision_backup = getattr(self, "_vision_backup", None)
-                    if isinstance(vision_backup, dict):
-                        backup_cameras = vision_backup.get("cameras")
-                        if isinstance(backup_cameras, dict):
-                            front_camera = backup_cameras.get("front")
-                if front_camera is None:
-                    print(
-                        f"[{self.__class__.__name__}] front camera not found; marker worker disabled.",
-                        flush=True,
+            env = self.env.unwrapped if hasattr(self.env, "unwrapped") else self.env
+            primary_cameras = getattr(env, "cameras", {}) or {}
+            backup_cameras: Dict[str, Any] = {}
+            vision_backup = getattr(self, "_vision_backup", None)
+            if isinstance(vision_backup, dict):
+                backup_candidate = vision_backup.get("cameras")
+                if isinstance(backup_candidate, dict):
+                    backup_cameras = backup_candidate
+
+            available_camera_names = set(primary_cameras.keys()) | set(
+                backup_cameras.keys()
+            )
+
+            for camera_name in self.marker_camera_names:
+                camera_obj = primary_cameras.get(camera_name)
+                if camera_obj is None:
+                    camera_obj = backup_cameras.get(camera_name)
+                if camera_obj is None:
+                    continue
+
+                intrinsic_info = self._extract_camera_intrinsic_info(camera_obj)
+                self._marker_worker = FrontCameraDetectionWorker(
+                    base_to_camera=_GLOBAL_T_BASE_TO_CAMERA,
+                    intrinsic_info=intrinsic_info,
+                    tag_size_m=DEFAULT_TAG_SIZE_M,
+                )
+                self._marker_worker.start()
+                self._marker_camera_active = camera_name
+                print(
+                    f"[{self.__class__.__name__}] Started marker worker for camera '{camera_name}'.",
+                    flush=True,
+                )
+                break
+
+            if self._marker_worker is None:
+                if self.marker_camera_names:
+                    raise ValueError(
+                        f"[{self.__class__.__name__}] None of the requested marker cameras "
+                        f"{self.marker_camera_names} were found. "
+                        f"Available cameras: {sorted(available_camera_names)}"
                     )
                 else:
-                    intrinsic_info = self._extract_camera_intrinsic_info(front_camera)
-                    self._marker_worker = FrontCameraDetectionWorker(
-                        base_to_camera=_GLOBAL_T_BASE_TO_CAMERA,
-                        intrinsic_info=intrinsic_info,
-                        tag_size_m=DEFAULT_TAG_SIZE_M,
-                    )
-                    self._marker_worker.start()
                     print(
-                        f"[{self.__class__.__name__}] Started front camera marker worker.",
+                        f"[{self.__class__.__name__}] No marker cameras specified; marker worker disabled.",
                         flush=True,
                     )
 
@@ -687,11 +831,20 @@ class RolloutPpoCus(RolloutBase):
         rgb_images = self.info.get("rgb_images")
         if not isinstance(rgb_images, dict):
             return False
-        front_rgb = rgb_images.get("front")
-        if front_rgb is None:
-            return False
-        self._marker_worker.submit_frame(front_rgb.copy())
-        return True
+        candidate_names = (
+            [self._marker_camera_active]
+            if self._marker_camera_active
+            else self.marker_camera_names
+        )
+        for camera_name in candidate_names:
+            if camera_name is None:
+                continue
+            frame = rgb_images.get(camera_name)
+            if frame is None:
+                continue
+            self._marker_worker.submit_frame(frame.copy())
+            return True
+        return False
 
     def _extract_camera_intrinsic_info(self, camera) -> Optional[Dict[str, Any]]:
         if camera is None:
@@ -830,16 +983,59 @@ class RolloutPpoCus(RolloutBase):
         return worker.get_latest_transforms()
 
     def get_state(self):
-        # Get latest value
+        extra_state_arrays: Dict[str, np.ndarray] = {}
         if len(self.state_keys) == 0:
-            state = np.zeros(0, dtype=np.float32)
+            state_vector = np.zeros(0, dtype=np.float32)
         else:
-            state = np.concatenate(
-                [
-                    self.motion_manager.get_data(state_key, self.obs)
-                    for state_key in self.state_keys
-                ]
+            extra_state_values: Dict[str, np.ndarray] = {}
+            if self.ppo_task_handler is not None:
+                extra_state_raw = self.ppo_task_handler.get_extra_state() or {}
+                if not isinstance(extra_state_raw, dict):
+                    raise TypeError(
+                        f"[{self.__class__.__name__}] Task handler must return a dict of extra states."
+                    )
+                extra_state_values = {
+                    key: np.asarray(value, dtype=np.float32).reshape(-1)
+                    for key, value in extra_state_raw.items()
+                }
+
+            # Validate extra state contributions
+            for key in self.extra_state_keys:
+                if key not in extra_state_values:
+                    raise KeyError(
+                        f"[{self.__class__.__name__}] Extra state '{key}' missing from PPO task handler output."
+                    )
+                arr = extra_state_values[key]
+                expected_dim = self.extra_state_dims.get(key)
+                if expected_dim is not None and arr.size != expected_dim:
+                    raise ValueError(
+                        f"[{self.__class__.__name__}] Extra state '{key}' has dimension {arr.size}, "
+                        f"expected {expected_dim}."
+                    )
+                extra_state_arrays[key] = arr
+
+            components = []
+            for state_key in self.state_keys:
+                if state_key in extra_state_arrays:
+                    components.append(extra_state_arrays[state_key])
+                else:
+                    components.append(
+                        self.motion_manager.get_data(state_key, self.obs)
+                    )
+
+            state_vector = (
+                np.concatenate(components).astype(np.float32)
+                if components
+                else np.zeros(0, dtype=np.float32)
             )
+            expected_state_dim = len(self.model_meta_info["state"]["example"])
+            if state_vector.size != expected_state_dim:
+                raise ValueError(
+                    f"[{self.__class__.__name__}] State dimension mismatch. "
+                    f"Constructed {state_vector.size} elements, "
+                    f"but model_meta_info expects {expected_state_dim}."
+                )
+
         marker_transforms, marker_timestamp = self.get_latest_marker_transforms(poll=True)
 
         if marker_transforms:
@@ -857,20 +1053,12 @@ class RolloutPpoCus(RolloutBase):
 
         qpos = self.motion_manager.get_data(DataKey.MEASURED_JOINT_POS, self.obs)
         qvel = self.motion_manager.get_data(DataKey.MEASURED_JOINT_VEL, self.obs)
-        target_qpos = np.array(
-            [
-                0.0,
-                -0.477,
-                0.0,
-                0.8571976,
-                0.0,
-                1.2771976,
-                -1.5707964,
-                40,
-            ],
-         
-            dtype=np.float32,
+
+        target_qpos = extra_state_arrays.get(
+            "target_joint_pos", self.default_target_joint_pos
         )
+        target_qpos = target_qpos.astype(np.float32).copy()
+
         qpos_ms = qpos.astype(np.float32).copy()
         qpos_ms[-1] = gripper_q_robomanip_to_maniskill(qpos_ms[-1])
         qvel_ms = qvel.astype(np.float32).copy()
@@ -883,7 +1071,7 @@ class RolloutPpoCus(RolloutBase):
             np.float32
         )
 
-        norm_state = normalize_data(state, self.model_meta_info["state"])
+        norm_state = normalize_data(state_vector, self.model_meta_info["state"])
 
         state = torch.tensor(norm_state, dtype=torch.float32)
 
@@ -1025,6 +1213,11 @@ class RolloutPpoCus(RolloutBase):
         self.policy_action_list = np.concatenate(
             [self.policy_action_list, self.policy_action[np.newaxis]]
         )
+
+    def reset(self):
+        super().reset()
+        if self.ppo_task_handler and hasattr(self.ppo_task_handler, "on_reset"):
+            self.ppo_task_handler.on_reset()
 
     def set_command_data(self, action_keys=None):
         if getattr(self, "_profile_enabled", False):

@@ -2,7 +2,7 @@ import argparse
 import json
 import pickle
 from pathlib import Path
-from typing import Any, Dict, Iterable, Mapping
+from typing import Any, Dict, Iterable, Mapping, Sequence
 
 import numpy as np
 
@@ -93,6 +93,68 @@ def _convert_section(section_name: str, section_cfg: Dict[str, Any]) -> Dict[str
     return result
 
 
+def _convert_ppo_task_section(section_cfg: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(section_cfg, dict):
+        raise TypeError(f"'ppo_task' section must be an object, got {type(section_cfg)}")
+
+    result: Dict[str, Any] = dict(section_cfg)
+
+    name = result.get("name")
+    if name is not None:
+        result["name"] = str(name)
+
+    module = result.get("module")
+    if not module or not isinstance(module, str):
+        raise ValueError("'ppo_task.module' must be a non-empty string")
+
+    extra_keys_cfg: Sequence[Any] = result.get("extra_keys", [])
+    normalized_extra_keys = []
+    for idx, item in enumerate(extra_keys_cfg):
+        if isinstance(item, Mapping):
+            key_name = item.get("name")
+            if not key_name or not isinstance(key_name, str):
+                raise ValueError(
+                    f"'ppo_task.extra_keys[{idx}].name' must be a non-empty string"
+                )
+            dim = item.get("dim")
+            if dim is None:
+                raise ValueError(
+                    f"'ppo_task.extra_keys[{idx}].dim' must be provided for key '{key_name}'"
+                )
+            try:
+                dim_int = int(dim)
+            except Exception as exc:  # pragma: no cover - defensive
+                raise ValueError(
+                    f"'ppo_task.extra_keys[{idx}].dim' must be an integer"
+                ) from exc
+            if dim_int <= 0:
+                raise ValueError(
+                    f"'ppo_task.extra_keys[{idx}].dim' must be positive, got {dim_int}"
+                )
+            normalized_extra_keys.append({"name": key_name, "dim": dim_int})
+        else:
+            raise TypeError(
+                "'ppo_task.extra_keys' entries must be objects with 'name' and 'dim'"
+            )
+    result["extra_keys"] = normalized_extra_keys
+
+    marker_cameras = result.get("marker_cameras")
+    if marker_cameras is None:
+        result["marker_cameras"] = []
+    elif isinstance(marker_cameras, (list, tuple)):
+        result["marker_cameras"] = [str(cam) for cam in marker_cameras]
+    else:
+        raise TypeError("'ppo_task.marker_cameras' must be a list of strings if provided")
+
+    params = result.get("params")
+    if params is None:
+        result["params"] = {}
+    elif not isinstance(params, Mapping):
+        raise TypeError("'ppo_task.params' must be an object if provided")
+
+    return result
+
+
 def _validate_vector_lengths(section_name: str, section_cfg: Dict[str, Any]) -> None:
     lengths = {}
     for key, value in section_cfg.items():
@@ -122,7 +184,13 @@ def _build_meta_info(config: Dict[str, Any]) -> Dict[str, Any]:
     meta_info: Dict[str, Any] = {}
     for section_name, section_cfg in config.items():
         if not isinstance(section_cfg, dict):
+            if section_name == "ppo_task":
+                raise TypeError("'ppo_task' section must be an object")
             meta_info[section_name] = section_cfg
+            continue
+
+        if section_name == "ppo_task":
+            meta_info[section_name] = _convert_ppo_task_section(section_cfg)
             continue
 
         converted_section = _convert_section(section_name, section_cfg)
