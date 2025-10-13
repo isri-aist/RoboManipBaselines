@@ -564,62 +564,14 @@ class RolloutPpoCus(RolloutBase):
         checkpoint_dir = os.path.split(self.args.checkpoint)[0]
         model_meta_info_path = os.path.join(checkpoint_dir, "model_meta_info.pkl")
 
-        if os.path.isfile(model_meta_info_path):
-            super().setup_model_meta_info()
-            return
+        if not os.path.isfile(model_meta_info_path):
+            raise FileNotFoundError(
+                f"[{self.__class__.__name__}] Required model_meta_info.pkl was not found "
+                f"next to the checkpoint: {model_meta_info_path}. "
+                "Generate the file (e.g., with CreatePpoCusMetaInfo.py) and re-run."
+            )
 
-        self.model_meta_info = self._build_default_model_meta_info()
-        print(
-            f"[{self.__class__.__name__}] model_meta_info.pkl not found. Using default ManiSkill-compatible meta info."
-        )
-
-        self.state_keys = self.model_meta_info["state"]["keys"]
-        self.action_keys = self.model_meta_info["action"]["keys"]
-        self.camera_names = self.model_meta_info["image"]["camera_names"]
-        self.state_dim = len(self.model_meta_info["state"]["example"])
-        self.action_dim = len(self.model_meta_info["action"]["example"])
-
-        if self.args.skip is None:
-            self.args.skip = self.model_meta_info["data"]["skip"]
-        if self.args.skip_draw is None:
-            self.args.skip_draw = self.args.skip
-
-    def _build_default_model_meta_info(self):
-        default_state_keys = [
-            DataKey.MEASURED_JOINT_POS,
-            DataKey.MEASURED_JOINT_VEL,
-            DataKey.MEASURED_EEF_WRENCH,
-        ]
-        default_action_keys = [DataKey.COMMAND_JOINT_POS]
-
-        state_dim = sum(DataKey.get_dim(key, self.env) for key in default_state_keys)
-        action_dim = sum(DataKey.get_dim(key, self.env) for key in default_action_keys)
-
-        state_template = np.zeros(state_dim, dtype=np.float32)
-        action_template = np.zeros(action_dim, dtype=np.float32)
-
-        if hasattr(self.env, "camera_names"):
-            camera_names = list(self.env.camera_names)
-        else:
-            camera_names = []
-
-        return {
-            "state": {
-                "keys": default_state_keys,
-                "example": state_template.copy(),
-                "mean": state_template.copy(),
-                "std": np.ones_like(state_template),
-            },
-            "action": {
-                "keys": default_action_keys,
-                "example": action_template.copy(),
-                "mean": action_template.copy(),
-                "std": np.ones_like(action_template),
-            },
-            "image": {"camera_names": camera_names},
-            "data": {"skip": 1, "n_obs_steps": 1, "n_action_steps": 1},
-            "policy": {},
-        }
+        super().setup_model_meta_info()
 
     def setup_policy(self):
         # Always keep vision enabled for marker detection
