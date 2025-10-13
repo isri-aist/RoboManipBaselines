@@ -142,8 +142,14 @@
     ],
     "markers": [
       {
-        "id": 1,
-        "name": "base_front_left",
+        "id": 182,
+        "name": "meaningless1",
+        "size_m": 0.0309
+      }
+      ,
+      {
+        "id": 188,
+        "name": "meaningless2",
         "size_m": 0.0309
       }
     ],
