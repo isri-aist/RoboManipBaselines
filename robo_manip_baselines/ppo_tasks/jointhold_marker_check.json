@@ -140,6 +140,13 @@
     "marker_cameras": [
       "front"
     ],
+    "markers": [
+      {
+        "id": 1,
+        "name": "base_front_left",
+        "size_m": 0.0309
+      }
+    ],
     "params": {
       "target_joint_pos": [
         0.0,

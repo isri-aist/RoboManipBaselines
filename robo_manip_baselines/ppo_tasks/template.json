@@ -121,5 +121,11 @@
     "n_obs_steps": 1,
     "n_action_steps": 1
   },
-  "policy": {}
+  "policy": {},
+  "ppo_task": {
+    "extra_keys": [],
+    "marker_cameras": [],
+    "markers": [],
+    "params": {}
+  }
 }

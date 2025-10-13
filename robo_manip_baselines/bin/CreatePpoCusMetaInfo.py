@@ -146,6 +146,51 @@ def _convert_ppo_task_section(section_cfg: Dict[str, Any]) -> Dict[str, Any]:
     else:
         raise TypeError("'ppo_task.marker_cameras' must be a list of strings if provided")
 
+    markers_cfg = result.get("markers")
+    if markers_cfg is None:
+        result["markers"] = []
+    elif isinstance(markers_cfg, list):
+        normalized_markers = []
+        seen_ids = set()
+        for idx, item in enumerate(markers_cfg):
+            if not isinstance(item, Mapping):
+                raise TypeError(
+                    "'ppo_task.markers' entries must be objects with at least an 'id'."
+                )
+            if "id" not in item:
+                raise ValueError(
+                    f"'ppo_task.markers[{idx}]' must contain an 'id' field."
+                )
+            try:
+                tag_id = int(item["id"])
+            except Exception as exc:
+                raise ValueError(
+                    f"'ppo_task.markers[{idx}].id' must be convertible to int."
+                ) from exc
+            if tag_id in seen_ids:
+                raise ValueError(
+                    f"Duplicate marker id {tag_id} in 'ppo_task.markers'."
+                )
+            seen_ids.add(tag_id)
+
+            marker_entry: Dict[str, Any] = {"id": tag_id}
+
+            if "size_m" in item and item["size_m"] is not None:
+                try:
+                    marker_entry["size_m"] = float(item["size_m"])
+                except Exception as exc:
+                    raise ValueError(
+                        f"'ppo_task.markers[{idx}].size_m' must be convertible to float."
+                    ) from exc
+
+            if "name" in item and item["name"] is not None:
+                marker_entry["name"] = str(item["name"])
+
+            normalized_markers.append(marker_entry)
+        result["markers"] = normalized_markers
+    else:
+        raise TypeError("'ppo_task.markers' must be a list if provided")
+
     params = result.get("params")
     if params is None:
         result["params"] = {}

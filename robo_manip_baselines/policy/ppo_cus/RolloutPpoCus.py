@@ -117,6 +117,7 @@ class FrontCameraDetectionWorker:
         self._latest_gray: Optional[np.ndarray] = None
         self._latest_timestamp: Optional[float] = None
         self._latest_transforms: Dict[int, np.ndarray] = {}
+        self._latest_transform_times: Dict[int, float] = {}
         self._latest_transforms_timestamp: Optional[float] = None
         self._detector = None
         self._camera_matrix: Optional[np.ndarray] = None
@@ -218,6 +219,10 @@ class FrontCameraDetectionWorker:
                 self._latest_transforms_timestamp,
             )
 
+    def get_latest_transform_times(self) -> Dict[int, float]:
+        with self._latest_lock:
+            return dict(self._latest_transform_times)
+
     def poll_transforms(self) -> Tuple[Optional[Dict[int, np.ndarray]], Optional[float]]:
         try:
             timestamp, transforms = self._result_queue.get_nowait()
@@ -226,8 +231,11 @@ class FrontCameraDetectionWorker:
 
         copied = {tag_id: matrix.copy() for tag_id, matrix in transforms.items()}
         with self._latest_lock:
-            self._latest_transforms = copied
-            self._latest_transforms_timestamp = timestamp
+            self._latest_transforms = {
+                tag_id: matrix.copy() for tag_id, matrix in copied.items()
+            }
+            if timestamp is not None:
+                self._latest_transforms_timestamp = timestamp
         return copied, timestamp
 
     def _processing_loop(self):
@@ -260,6 +268,7 @@ class FrontCameraDetectionWorker:
                         poses = []
                     if self._last_detection_count != len(poses):
                         print(
+                            f"[FrontCameraDetectionWorker] Detected {len(poses)} tags in current frame.",
                             flush=True,
                         )
                         self._last_detection_count = len(poses)
@@ -271,6 +280,7 @@ class FrontCameraDetectionWorker:
                             T_cam_to_tag = build_homogeneous_transform(pose.rvec, pose.tvec)
                         except Exception as exc:  # pragma: no cover
                             print(
+                                f"[FrontCameraDetectionWorker] Failed to build transform for tag {pose.tag_id}: {exc}",
                                 flush=True,
                             )
                             continue
@@ -281,30 +291,35 @@ class FrontCameraDetectionWorker:
                             formatter={"float_kind": lambda x: f"{x: .4f}"},
                         )
                         print(
+                            f"[FrontCameraDetectionWorker] tag {pose.tag_id} transform:\n{matrix_str}",
                             flush=True,
                         )
 
+            payload = None
             with self._latest_lock:
-                self._latest_transforms = {
-                    tag_id: matrix.copy() for tag_id, matrix in transforms.items()
-                }
-                self._latest_transforms_timestamp = timestamp
+                if transforms:
+                    for tag_id, matrix in transforms.items():
+                        self._latest_transforms[tag_id] = matrix.copy()
+                        self._latest_transform_times[tag_id] = timestamp
+                    self._latest_transforms_timestamp = timestamp
+                    combined = {
+                        tag_id: matrix.copy()
+                        for tag_id, matrix in self._latest_transforms.items()
+                    }
+                    payload = (timestamp, combined)
 
-            payload = (
-                timestamp,
-                {tag_id: matrix.copy() for tag_id, matrix in transforms.items()},
-            )
-            try:
-                self._result_queue.put_nowait(payload)
-            except queue.Full:
-                try:
-                    self._result_queue.get_nowait()
-                except queue.Empty:
-                    pass
+            if payload is not None:
                 try:
                     self._result_queue.put_nowait(payload)
                 except queue.Full:
-                    pass
+                    try:
+                        self._result_queue.get_nowait()
+                    except queue.Empty:
+                        pass
+                    try:
+                        self._result_queue.put_nowait(payload)
+                    except queue.Full:
+                        pass
 
     def _build_detector(self):
         if self._detector is not None:
@@ -339,6 +354,7 @@ class FrontCameraDetectionWorker:
         else:
             if self._detector is not None:
                 print(
+                    "[FrontCameraDetectionWorker] AprilTag detector initialized (tag36h11).",
                     flush=True,
                 )
         return self._detector
@@ -590,6 +606,11 @@ class RolloutPpoCus(RolloutBase):
         self.extra_state_keys: list[str] = []
         self.extra_state_dims: Dict[str, int] = {}
         self.ppo_task_handler = None
+        self.ppo_task_params: Dict[str, Any] = {}
+        self.marker_definitions: List[Dict[str, Any]] = []
+        self.required_marker_ids: List[int] = []
+        self.marker_name_map: Dict[int, str] = {}
+        self.marker_size_map: Dict[int, float] = {}
         self.default_target_joint_pos = DEFAULT_TARGET_JOINT_POS.copy()
         self.marker_camera_names: List[str] = ["front"]
         self._marker_camera_active: Optional[str] = None
@@ -668,6 +689,7 @@ class RolloutPpoCus(RolloutBase):
             raise TypeError(
                 f"[{self.__class__.__name__}] 'ppo_task.params' must be a dictionary."
             )
+        self.ppo_task_params = dict(params)
 
         self.ppo_task_handler = builder(self, params)
         if self.ppo_task_handler is None:
@@ -682,6 +704,37 @@ class RolloutPpoCus(RolloutBase):
             raise TypeError(
                 f"[{self.__class__.__name__}] 'ppo_task.marker_cameras' must be a list of camera names."
             )
+
+        marker_defs_cfg = ppo_task_cfg.get("markers", [])
+        if marker_defs_cfg:
+            if not isinstance(marker_defs_cfg, list):
+                raise TypeError(
+                    f"[{self.__class__.__name__}] 'ppo_task.markers' must be a list."
+                )
+            definitions: List[Dict[str, Any]] = []
+            seen_ids: set[int] = set()
+            for entry in marker_defs_cfg:
+                if not isinstance(entry, dict):
+                    raise TypeError(
+                        f"[{self.__class__.__name__}] Invalid marker entry: {entry}"
+                    )
+                if "id" not in entry:
+                    raise ValueError(
+                        f"[{self.__class__.__name__}] Marker entry requires 'id': {entry}"
+                    )
+                tag_id = int(entry["id"])
+                if tag_id in seen_ids:
+                    raise ValueError(
+                        f"[{self.__class__.__name__}] Duplicate marker id detected: {tag_id}"
+                    )
+                seen_ids.add(tag_id)
+                name = str(entry.get("name", f"marker_{tag_id}"))
+                size_m = float(entry.get("size_m", DEFAULT_TAG_SIZE_M))
+                definitions.append({"id": tag_id, "name": name, "size_m": size_m})
+            self.marker_definitions = definitions
+            self.required_marker_ids = [item["id"] for item in definitions]
+            self.marker_name_map = {item["id"]: item["name"] for item in definitions}
+            self.marker_size_map = {item["id"]: item["size_m"] for item in definitions}
 
         self.extra_state_keys = extra_state_keys
         self.extra_state_dims = extra_state_dims
@@ -765,6 +818,8 @@ class RolloutPpoCus(RolloutBase):
 
         self._marker_worker = None
         self._marker_camera_active = None
+        self.marker_transform_cache: Dict[int, np.ndarray] = {}
+        self.marker_detection_verified = False
         if _GLOBAL_T_BASE_TO_CAMERA is None:
             print(
                 f"[{self.__class__.__name__}] T_base→camera calibration not loaded; marker worker disabled.",
@@ -823,6 +878,8 @@ class RolloutPpoCus(RolloutBase):
             self._profile_data = defaultdict(list)
             self._wrap_profile_hooks()
 
+        self._ensure_initial_marker_detection()
+
     def _submit_marker_frame(self) -> bool:
         if getattr(self, "_marker_worker", None) is None:
             return False
@@ -845,6 +902,59 @@ class RolloutPpoCus(RolloutBase):
             self._marker_worker.submit_frame(frame.copy())
             return True
         return False
+
+    def _ensure_initial_marker_detection(self) -> None:
+        if not self.required_marker_ids:
+            return
+        if self._marker_worker is None:
+            raise RuntimeError(
+                f"[{self.__class__.__name__}] Marker worker not initialized, but marker IDs were specified."
+            )
+
+        timeout = float(self.ppo_task_params.get("initial_detection_timeout", 5.0))
+        poll_interval = float(self.ppo_task_params.get("initial_detection_interval", 0.05))
+        start_time = time.time()
+        last_report_time = start_time
+
+        missing_ids = set(self.required_marker_ids)
+
+        while time.time() - start_time <= timeout:
+            transforms, _ = self.get_latest_marker_transforms(poll=True)
+            if not transforms:
+                transforms, _ = self.get_latest_marker_transforms()
+
+            if transforms:
+                for marker_id, matrix in transforms.items():
+                    self.marker_transform_cache[marker_id] = matrix.copy()
+                missing_ids = {
+                    marker_id
+                    for marker_id in self.required_marker_ids
+                    if marker_id not in self.marker_transform_cache
+                }
+                if not missing_ids:
+                    self.marker_detection_verified = True
+                    print(
+                        f"[{self.__class__.__name__}] Confirmed initial detection of markers: "
+                        f"{sorted(self.required_marker_ids)}",
+                        flush=True,
+                    )
+                    return
+
+            current_time = time.time()
+            if current_time - last_report_time >= 1.0:
+                print(
+                    f"[{self.__class__.__name__}] Waiting for marker detection. "
+                    f"Missing IDs: {sorted(missing_ids)}",
+                    flush=True,
+                )
+                last_report_time = current_time
+
+            time.sleep(poll_interval)
+
+        raise RuntimeError(
+            f"[{self.__class__.__name__}] Failed to detect required markers within {timeout:.1f}s. "
+            f"Missing IDs: {sorted(missing_ids)}"
+        )
 
     def _extract_camera_intrinsic_info(self, camera) -> Optional[Dict[str, Any]]:
         if camera is None:
@@ -1037,19 +1147,51 @@ class RolloutPpoCus(RolloutBase):
                 )
 
         marker_transforms, marker_timestamp = self.get_latest_marker_transforms(poll=True)
-
         if marker_transforms:
-            ts_str = f"{marker_timestamp:.3f}" if marker_timestamp is not None else "unknown"
+            for marker_id, matrix in marker_transforms.items():
+                self.marker_transform_cache[marker_id] = matrix.copy()
+
+        if self._marker_worker is not None:
+            marker_times = self._marker_worker.get_latest_transform_times()
+        else:
+            marker_times = {}
+
+        if self.marker_transform_cache:
+            ts_str = (
+                f"{marker_timestamp:.3f}"
+                if marker_timestamp is not None
+                else "unknown"
+            )
             print(
-                f"[{self.__class__.__name__}] Latest marker transforms (t={ts_str}, detected={len(marker_transforms)}):",
+                f"[{self.__class__.__name__}] Marker transforms cache (t={ts_str}):",
                 flush=True,
             )
-            for tag_id, T in marker_transforms.items():
+            for marker_id in sorted(self.marker_transform_cache.keys()):
+                matrix = self.marker_transform_cache[marker_id]
+                marker_name = self.marker_name_map.get(marker_id, f"id{marker_id}")
                 matrix_str = np.array2string(
-                    T,
+                    matrix,
                     formatter={"float_kind": lambda x: f"{x: .4f}"},
                 )
-                print(f"  tag {tag_id}:\n{matrix_str}", flush=True)
+                last_seen = marker_times.get(marker_id)
+                last_seen_str = (
+                    f"{last_seen:.3f}s" if last_seen is not None else "unknown"
+                )
+                print(
+                    f"  [{marker_name}] id={marker_id}, last_seen={last_seen_str}\n{matrix_str}",
+                    flush=True,
+                )
+        if self.required_marker_ids:
+            missing_now = [
+                marker_id
+                for marker_id in self.required_marker_ids
+                if marker_id not in self.marker_transform_cache
+            ]
+            if missing_now:
+                print(
+                    f"[{self.__class__.__name__}] Warning: Missing cached transforms for marker IDs {missing_now}.",
+                    flush=True,
+                )
 
         qpos = self.motion_manager.get_data(DataKey.MEASURED_JOINT_POS, self.obs)
         qvel = self.motion_manager.get_data(DataKey.MEASURED_JOINT_VEL, self.obs)
