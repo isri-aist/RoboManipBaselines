@@ -48,5 +48,6 @@ python ./bin/ViewModelMetaInfo.py ./checkpoint/Mlp/RealXarm7Demo_20250911_162223
 
 
 make pickle file of meta_info
-python ./bin/CreatePpoCusMetaInfo.py --config ./tasks/jointhold_marker_check.json --output ./checkpoint/PpoCus/Align/model_meta_info.pkl /
+python ./bin/CreatePpoCusMetaInfo.py --config ./ppo_tasks/jointhold_marker_check.json --output ./checkpoint/PpoCus/Align/model_meta_info.pkl /
 ; python ./bin/Rollout.py PpoCus RealXarm7Demo --wait_before_start --skip_draw 50 -- --save_rollout --config ./envs/configs/RealXarm7DemoEnv.yaml --checkpoint final_ckpt.pt
+
