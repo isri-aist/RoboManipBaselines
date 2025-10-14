@@ -3,18 +3,9 @@
     "keys": [
       "measured_joint_pos",
       "measured_joint_vel",
-      "target_joint_pos",
-      "marker_pose_base"
+      "target_marker_pose"
     ],
     "example": [
-      0.0,
-      0.0,
-      0.0,
-      0.0,
-      0.0,
-      0.0,
-      0.0,
-      0.0,
       0.0,
       0.0,
       0.0,
@@ -66,25 +57,9 @@
       0.0,
       0.0,
       0.0,
-      0.0,
-      0.0,
-      0.0,
-      0.0,
-      0.0,
-      0.0,
-      0.0,
-      0.0,
       0.0
     ],
     "std": [
-      1.0,
-      1.0,
-      1.0,
-      1.0,
-      1.0,
-      1.0,
-      1.0,
-      1.0,
       1.0,
       1.0,
       1.0,
@@ -161,11 +136,7 @@
     "module": "robo_manip_baselines.policy.ppo_cus.ppo_tasks.align",
     "extra_keys": [
       {
-        "name": "target_joint_pos",
-        "dim": 8
-      },
-      {
-        "name": "marker_pose_base",
+        "name": "target_marker_pose",
         "dim": 9
       }
     ],
@@ -180,16 +151,6 @@
       }
     ],
     "params": {
-      "target_joint_pos": [
-        0.0,
-        -0.477,
-        0.0,
-        0.8571976,
-        0.0,
-        1.2771976,
-        -1.5707964,
-        40.0
-      ],
       "initial_detection_timeout": 5.0,
       "initial_detection_interval": 0.05
     }

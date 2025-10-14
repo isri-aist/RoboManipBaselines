@@ -1195,22 +1195,24 @@ class RolloutPpoCus(RolloutBase):
         qpos = self.motion_manager.get_data(DataKey.MEASURED_JOINT_POS, self.obs)
         qvel = self.motion_manager.get_data(DataKey.MEASURED_JOINT_VEL, self.obs)
 
-        target_qpos = extra_state_arrays.get(
-            "target_joint_pos", self.default_target_joint_pos
-        )
-        target_qpos = target_qpos.astype(np.float32).copy()
-
         qpos_ms = qpos.astype(np.float32).copy()
         qpos_ms[-1] = gripper_q_robomanip_to_maniskill(qpos_ms[-1])
         qvel_ms = qvel.astype(np.float32).copy()
         if qvel_ms.size > 0:
             qvel_ms[-1] = gripper_qvel_robomanip_to_maniskill(qvel_ms[-1])
-        target_qpos_ms = target_qpos.copy()
-        target_qpos_ms[-1] = gripper_q_robomanip_to_maniskill(target_qpos_ms[-1])
+        policy_components = [qpos_ms.astype(np.float32), qvel_ms.astype(np.float32)]
 
-        self.state_for_ppo = np.concatenate([qpos_ms, qvel_ms, target_qpos_ms]).astype(
-            np.float32
-        )
+        if "target_joint_pos" in extra_state_arrays:
+            target_qpos = extra_state_arrays["target_joint_pos"].astype(np.float32).copy()
+            target_qpos_ms = target_qpos.copy()
+            target_qpos_ms[-1] = gripper_q_robomanip_to_maniskill(target_qpos_ms[-1])
+            policy_components.append(target_qpos_ms.astype(np.float32))
+
+        marker_pose = extra_state_arrays.get("target_marker_pose")
+        if marker_pose is not None:
+            policy_components.append(marker_pose.astype(np.float32))
+
+        self.state_for_ppo = np.concatenate(policy_components).astype(np.float32)
 
         norm_state = normalize_data(state_vector, self.model_meta_info["state"])
 

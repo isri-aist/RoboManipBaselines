@@ -14,11 +14,6 @@ from typing import Dict, Mapping, Optional
 
 import numpy as np
 
-from .jointhold_marker_check import (
-    DEFAULT_TARGET_JOINT_POS as _DEFAULT_TARGET_JOINT_POS,
-)
-
-
 def _rotation_matrix_to_6d(rotation: np.ndarray) -> np.ndarray:
     """
     Convert a 3x3 rotation matrix to the 6D representation (Zhou et al., 2019).
@@ -45,15 +40,8 @@ def _rotation_matrix_to_6d(rotation: np.ndarray) -> np.ndarray:
 class AlignTask:
     rollout: "RolloutPpoCus"
     params: Mapping[str, object] = field(default_factory=dict)
-    _target_joint_pos: np.ndarray = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
-        custom_target = self.params.get("target_joint_pos")
-        if custom_target is not None:
-            self._target_joint_pos = np.asarray(custom_target, dtype=np.float32).reshape(-1)
-        else:
-            self._target_joint_pos = _DEFAULT_TARGET_JOINT_POS.copy()
-
         marker_ids = self.rollout.required_marker_ids
         if not marker_ids:
             raise ValueError(
@@ -71,10 +59,6 @@ class AlignTask:
         return
 
     def get_extra_state(self) -> Dict[str, np.ndarray]:
-        extra: Dict[str, np.ndarray] = {
-            "target_joint_pos": self._target_joint_pos.astype(np.float32)
-        }
-
         if self.marker_id not in self.rollout.marker_transform_cache:
             raise RuntimeError(
                 f"[AlignTask] Marker id {self.marker_id} not available in cache."
@@ -91,9 +75,7 @@ class AlignTask:
         rotation6d = _rotation_matrix_to_6d(rotation).astype(np.float32)
 
         marker_pose = np.concatenate([translation, rotation6d]).astype(np.float32)
-        extra["marker_pose_base"] = marker_pose
-
-        return extra
+        return {"target_marker_pose": marker_pose}
 
 
 def build_ppo_task(
