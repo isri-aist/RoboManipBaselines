@@ -1027,7 +1027,46 @@ class RolloutPpoCus(RolloutBase):
         if frame_height is not None:
             info["frame_height"] = int(frame_height)
 
-        return info if info else None
+        required_keys = ("fx", "fy", "ppx", "ppy")
+        if not all(key in info for key in required_keys):
+            # Attempt to retrieve intrinsics directly from the RealSense pipeline if present.
+            if hasattr(camera, "_pipeline"):
+                try:
+                    import pyrealsense2 as rs  # type: ignore
+
+                    frames = camera._pipeline.wait_for_frames()  # noqa: SLF001
+                    color_profile = frames.get_color_frame().profile.as_video_stream_profile()
+                    intr = color_profile.intrinsics
+                    coeffs = list(intr.coeffs[:5])
+                    info.update(
+                        {
+                            "fx": float(intr.fx),
+                            "fy": float(intr.fy),
+                            "ppx": float(intr.ppx),
+                            "ppy": float(intr.ppy),
+                            "coeffs": coeffs,
+                            "frame_width": intr.width,
+                            "frame_height": intr.height,
+                        }
+                    )
+                    # Cache retrieved values on the camera for subsequent calls.
+                    setattr(camera, "color_fx", intr.fx)
+                    setattr(camera, "color_fy", intr.fy)
+                    setattr(camera, "color_ppx", intr.ppx)
+                    setattr(camera, "color_ppy", intr.ppy)
+                    setattr(camera, "color_coeffs", coeffs)
+                    setattr(camera, "color_width", intr.width)
+                    setattr(camera, "color_height", intr.height)
+                except Exception:
+                    pass
+
+        if not all(key in info for key in required_keys):
+            raise RuntimeError(
+                f"[{self.__class__.__name__}] Camera intrinsics (fx, fy, ppx, ppy) are unavailable. "
+                "Please ensure the RealSense intrinsics are accessible before starting the rollout."
+            )
+
+        return info
 
     def _disable_env_vision(self):
         env = self.env.unwrapped if hasattr(self.env, "unwrapped") else self.env
