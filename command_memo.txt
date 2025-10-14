@@ -51,6 +51,8 @@ make pickle file of meta_info
 python ./bin/CreatePpoCusMetaInfo.py --config ./ppo_tasks/jointhold_marker_check.json --output ./checkpoint/PpoCus/Align/model_meta_info.pkl /
 python ./bin/CreatePpoCusMetaInfo.py --config ./ppo_tasks/align.json --output ./checkpoint/PpoCus/Align/model_meta_info_align.pkl --force
 
+extrinsic_calibration
+python ./bin/extrinsic_calibraition.py
 
 make pickle and run
 ##########################################################################
@@ -80,7 +82,7 @@ python ./bin/Rollout.py PpoCus RealXarm7Demo \
   --skip_draw 50 \
   --save_rollout \
   --config ./envs/configs/RealXarm7DemoEnv.yaml \
-  --checkpoint ./checkpoint/PpoCus/Align/ckpt_976.pt
+  --checkpoint ./checkpoint/PpoCus/Align/ckpt_101.pt
 ############################################################################
 
 
