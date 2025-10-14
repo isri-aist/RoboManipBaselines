@@ -878,8 +878,6 @@ class RolloutPpoCus(RolloutBase):
             self._profile_data = defaultdict(list)
             self._wrap_profile_hooks()
 
-        self._ensure_initial_marker_detection()
-
     def _submit_marker_frame(self) -> bool:
         if getattr(self, "_marker_worker", None) is None:
             return False
@@ -919,6 +917,7 @@ class RolloutPpoCus(RolloutBase):
         missing_ids = set(self.required_marker_ids)
 
         while time.time() - start_time <= timeout:
+            self._submit_marker_frame()
             transforms, _ = self.get_latest_marker_transforms(poll=True)
             if not transforms:
                 transforms, _ = self.get_latest_marker_transforms()
@@ -1358,6 +1357,19 @@ class RolloutPpoCus(RolloutBase):
 
     def reset(self):
         super().reset()
+        if self.marker_transform_cache is not None:
+            self.marker_transform_cache.clear()
+        self.marker_detection_verified = False
+
+        if self._marker_worker is not None:
+            # Submit the first frame captured during reset, if available.
+            self._submit_marker_frame()
+            try:
+                self._ensure_initial_marker_detection()
+            except RuntimeError as exc:
+                print(f"[{self.__class__.__name__}] {exc}", flush=True)
+                raise
+
         if self.ppo_task_handler and hasattr(self.ppo_task_handler, "on_reset"):
             self.ppo_task_handler.on_reset()
 
