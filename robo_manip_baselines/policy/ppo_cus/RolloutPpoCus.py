@@ -78,7 +78,7 @@ _GLOBAL_T_BASE_TO_CAMERA = _load_base_to_camera_transform(_DEFAULT_T_BASE_TO_CAM
 DEFAULT_TAG_SIZE_M = 0.0309
 DEFAULT_DETECTOR_THREADS = 4
 DEFAULT_DETECTOR_DECIMATE = 1.0
-DEFAULT_DETECTOR_SIGMA = 0.3
+DEFAULT_DETECTOR_SIGMA = 1.0
 DEFAULT_DETECTOR_SHARPENING = 0.1
 
 DEFAULT_TARGET_JOINT_POS = np.array(
@@ -777,6 +777,7 @@ class RolloutPpoCus(RolloutBase):
         self.device = torch.device("cuda" if use_cuda else "cpu")
         self.policy.to(self.device)
         self.policy.eval()
+        self._policy_obs_dim = obs_dim
 
         self._normalized_action_low = torch.full(
             (self.action_dim,), float(_NORMALIZED_ACTION_LOW.item()), device=self.device
@@ -798,6 +799,18 @@ class RolloutPpoCus(RolloutBase):
 
         print(
             f"[{self.__class__.__name__}] Load ManiSkill PPO checkpoint on {self.device}"
+        )
+
+        expanded_path = _REPO_ROOT / "robo_manip_baselines" / "rollout_debug_log_expanded.csv"
+        header = ["step_idx"]
+        header += [f"obs_{idx}" for idx in range(self._policy_obs_dim)]
+        header += [f"direct_joint_command_{idx}" for idx in range(self.action_dim)]
+        with open(expanded_path, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(header)
+        self._expanded_csv_path: Optional[Path] = expanded_path
+        print(
+            f"[{self.__class__.__name__}] Logging expanded observations/actions to {expanded_path}"
         )
 
         self._log_path = None
@@ -1343,6 +1356,25 @@ class RolloutPpoCus(RolloutBase):
                             json.dumps(direct_list),
                         ]
                     )
+            if self._expanded_csv_path is not None:
+                obs_values = obs_tensor.squeeze(0).detach().cpu().numpy().astype(np.float64)
+                obs_values = obs_values[: self._policy_obs_dim]
+                if obs_values.size < self._policy_obs_dim:
+                    obs_values = np.pad(
+                        obs_values,
+                        (0, self._policy_obs_dim - obs_values.size),
+                        mode="constant",
+                        constant_values=0.0,
+                    )
+                row = [int(getattr(self, "rollout_time_idx", 0))]
+                row += obs_values.tolist()
+                action_values = physical_np.tolist()
+                if len(action_values) < self.action_dim:
+                    action_values += [0.0] * (self.action_dim - len(action_values))
+                row += action_values[: self.action_dim]
+                with open(self._expanded_csv_path, "a", newline="") as f:
+                    writer = csv.writer(f)
+                    writer.writerow(row)
 
             self.policy_action_buf = [physical_np]
 
