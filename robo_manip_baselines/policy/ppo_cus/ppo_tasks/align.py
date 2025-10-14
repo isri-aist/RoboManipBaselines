@@ -90,7 +90,12 @@ class AlignTask:
         rotation = T[:3, :3]
         rotation6d = _rotation_matrix_to_6d(rotation).astype(np.float32)
 
-        marker_pose = np.concatenate([translation, rotation6d]).astype(np.float32)
+        z_axis = rotation[:, 2]
+        extra_components = z_axis[:2]  # take first two elements of the third column
+
+        marker_pose = np.concatenate(
+            [translation, rotation6d, extra_components]
+        ).astype(np.float32)
         extra["marker_pose_base"] = marker_pose
 
         return extra

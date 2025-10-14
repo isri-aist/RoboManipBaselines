@@ -777,6 +777,7 @@ class RolloutPpoCus(RolloutBase):
         self.device = torch.device("cuda" if use_cuda else "cpu")
         self.policy.to(self.device)
         self.policy.eval()
+        self.policy_obs_dim = obs_dim
 
         self._normalized_action_low = torch.full(
             (self.action_dim,), float(_NORMALIZED_ACTION_LOW.item()), device=self.device
@@ -820,6 +821,9 @@ class RolloutPpoCus(RolloutBase):
         self._marker_camera_active = None
         self.marker_transform_cache: Dict[int, np.ndarray] = {}
         self.marker_detection_verified = False
+        self.marker_pose_for_policy = np.zeros(
+            self.extra_state_dims.get("marker_pose_base", 0), dtype=np.float32
+        )
         if _GLOBAL_T_BASE_TO_CAMERA is None:
             print(
                 f"[{self.__class__.__name__}] T_base→camera calibration not loaded; marker worker disabled.",
@@ -1122,6 +1126,8 @@ class RolloutPpoCus(RolloutBase):
                         f"expected {expected_dim}."
                     )
                 extra_state_arrays[key] = arr
+                if key == "marker_pose_base":
+                    self.marker_pose_for_policy = arr.astype(np.float32)
 
             components = []
             for state_key in self.state_keys:
@@ -1208,9 +1214,20 @@ class RolloutPpoCus(RolloutBase):
         target_qpos_ms = target_qpos.copy()
         target_qpos_ms[-1] = gripper_q_robomanip_to_maniskill(target_qpos_ms[-1])
 
-        self.state_for_ppo = np.concatenate([qpos_ms, qvel_ms, target_qpos_ms]).astype(
-            np.float32
-        )
+        policy_components = [qpos_ms.astype(np.float32), qvel_ms.astype(np.float32), target_qpos_ms.astype(np.float32)]
+        if self.marker_pose_for_policy.size > 0:
+            policy_components.append(self.marker_pose_for_policy.astype(np.float32))
+        policy_vector = np.concatenate(policy_components).astype(np.float32)
+
+        if hasattr(self, "policy_obs_dim"):
+            obs_dim = int(self.policy_obs_dim)
+            if policy_vector.size < obs_dim:
+                padding = np.zeros(obs_dim - policy_vector.size, dtype=np.float32)
+                policy_vector = np.concatenate([policy_vector, padding])
+            elif policy_vector.size > obs_dim:
+                policy_vector = policy_vector[:obs_dim]
+
+        self.state_for_ppo = policy_vector
 
         norm_state = normalize_data(state_vector, self.model_meta_info["state"])
 
