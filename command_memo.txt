@@ -80,5 +80,5 @@ python ./bin/Rollout.py PpoCus RealXarm7Demo \
   --skip_draw 50 \
   --save_rollout \
   --config ./envs/configs/RealXarm7DemoEnv.yaml \
-  --checkpoint ./checkpoint/PpoCus/Align/final_ckpt.pt
+  --checkpoint ./checkpoint/PpoCus/Align/ckpt_976.pt
 ############################################################################
