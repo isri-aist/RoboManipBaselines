@@ -684,19 +684,6 @@ class RolloutPpoCus(RolloutBase):
                 f"[{self.__class__.__name__}] Module '{module_path}' does not expose a 'build_ppo_task' function."
             )
 
-        params = ppo_task_cfg.get("params") or {}
-        if not isinstance(params, dict):
-            raise TypeError(
-                f"[{self.__class__.__name__}] 'ppo_task.params' must be a dictionary."
-            )
-        self.ppo_task_params = dict(params)
-
-        self.ppo_task_handler = builder(self, params)
-        if self.ppo_task_handler is None:
-            raise RuntimeError(
-                f"[{self.__class__.__name__}] Task builder '{module_path}.build_ppo_task' returned None."
-            )
-
         marker_cameras = ppo_task_cfg.get("marker_cameras", [])
         if isinstance(marker_cameras, list):
             self.marker_camera_names = [str(name) for name in marker_cameras]
@@ -736,11 +723,24 @@ class RolloutPpoCus(RolloutBase):
             self.marker_name_map = {item["id"]: item["name"] for item in definitions}
             self.marker_size_map = {item["id"]: item["size_m"] for item in definitions}
 
+        params = ppo_task_cfg.get("params") or {}
+        if not isinstance(params, dict):
+            raise TypeError(
+                f"[{self.__class__.__name__}] 'ppo_task.params' must be a dictionary."
+            )
+        self.ppo_task_params = dict(params)
+
         self.extra_state_keys = extra_state_keys
         self.extra_state_dims = extra_state_dims
         self.standard_state_keys = [
             key for key in self.state_keys if key not in self.extra_state_keys
         ]
+
+        self.ppo_task_handler = builder(self, params)
+        if self.ppo_task_handler is None:
+            raise RuntimeError(
+                f"[{self.__class__.__name__}] Task builder '{module_path}.build_ppo_task' returned None."
+            )
 
         task_name = ppo_task_cfg.get("name") or module_path
         print(
