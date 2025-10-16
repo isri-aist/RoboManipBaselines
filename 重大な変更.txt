@@ -1,0 +1,3 @@
+robo_manip_baselines/envs/real/RealEnvBase.py
+の107行目を変更しました。
+
