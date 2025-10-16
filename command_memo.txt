@@ -87,4 +87,4 @@ python ./bin/Rollout.py PpoCus RealXarm7Demo \
 
 
 
-python ./bin/CollectXarm7Dynamics.py --robot-ip 192.168.1.185 --duration 120 --sample-rate 200 --output-dir ./measurements
+python ./bin/CollectXarm7Dynamics.py --robot-ip 192.168.1.244 --duration 120 --sample-rate 200 --output-dir ./measurements

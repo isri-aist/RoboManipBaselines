@@ -1,0 +1,240 @@
+{
+  "metadata": {
+    "robot_ip": "192.168.1.244",
+    "start_wall_time_utc": "2025-10-16T05:06:25.435760+00:00",
+    "end_wall_time_utc": "2025-10-16T05:06:26.842081+00:00",
+    "duration_s": 1.4044539249989612,
+    "sample_count": 278,
+    "sample_rate_requested_hz": 200.0,
+    "sample_rate_achieved_hz": 197.22968128000701,
+    "report_type": "rich",
+    "stream_collected": true
+  },
+  "observed_joint_limits": [
+    {
+      "joint": "joint1",
+      "max_velocity_rad_s": 0.0,
+      "max_acceleration_rad_s2": 0.0,
+      "max_jerk_rad_s3": 0.0
+    },
+    {
+      "joint": "joint2",
+      "max_velocity_rad_s": 0.0,
+      "max_acceleration_rad_s2": 0.0,
+      "max_jerk_rad_s3": 0.0
+    },
+    {
+      "joint": "joint3",
+      "max_velocity_rad_s": 0.0,
+      "max_acceleration_rad_s2": 0.0,
+      "max_jerk_rad_s3": 0.0
+    },
+    {
+      "joint": "joint4",
+      "max_velocity_rad_s": 0.0,
+      "max_acceleration_rad_s2": 0.0,
+      "max_jerk_rad_s3": 0.0
+    },
+    {
+      "joint": "joint5",
+      "max_velocity_rad_s": 0.0,
+      "max_acceleration_rad_s2": 0.0,
+      "max_jerk_rad_s3": 0.0
+    },
+    {
+      "joint": "joint6",
+      "max_velocity_rad_s": 0.0,
+      "max_acceleration_rad_s2": 0.0,
+      "max_jerk_rad_s3": 0.0
+    },
+    {
+      "joint": "joint7",
+      "max_velocity_rad_s": 0.0,
+      "max_acceleration_rad_s2": 0.0,
+      "max_jerk_rad_s3": 0.0
+    }
+  ],
+  "controller_reported_limits": {
+    "joint_speed_limit_rad_s": [
+      0.0010000000474974513,
+      3.1415927410125732
+    ],
+    "joint_acc_limit_rad_s2": [
+      0.009999999776482582,
+      20.0
+    ],
+    "joint_jerk_rad_s3": 200.0,
+    "last_used_joint_speed_rad_s": 0.3490658503988659,
+    "last_used_joint_acc_rad_s2": 8.726646259971648
+  },
+  "servo_pid_registers": [
+    {
+      "joint": "joint1",
+      "pos_kp": 100.0,
+      "pos_fwd_kp": 20.0,
+      "pos_feedforward_time_const": 5.0,
+      "speed_kp": 200.0,
+      "speed_ki": 150.0,
+      "current_kp": 260.0,
+      "current_ki": 200.0,
+      "speed_ifilter": 0.0,
+      "speed_ofilter": 1.0,
+      "current_ifilter": 0.0,
+      "pos_kd": 0.0,
+      "pos_command_filter": 40.0,
+      "temperature_raw": 24.0,
+      "over_temp_threshold": 90.0
+    },
+    {
+      "joint": "joint2",
+      "pos_kp": 100.0,
+      "pos_fwd_kp": 20.0,
+      "pos_feedforward_time_const": 5.0,
+      "speed_kp": 200.0,
+      "speed_ki": 150.0,
+      "current_kp": 260.0,
+      "current_ki": 200.0,
+      "speed_ifilter": 0.0,
+      "speed_ofilter": 1.0,
+      "current_ifilter": 0.0,
+      "pos_kd": 0.0,
+      "pos_command_filter": 40.0,
+      "temperature_raw": 26.0,
+      "over_temp_threshold": 90.0
+    },
+    {
+      "joint": "joint3",
+      "pos_kp": 100.0,
+      "pos_fwd_kp": 20.0,
+      "pos_feedforward_time_const": 5.0,
+      "speed_kp": 200.0,
+      "speed_ki": 150.0,
+      "current_kp": 260.0,
+      "current_ki": 200.0,
+      "speed_ifilter": 0.0,
+      "speed_ofilter": 1.0,
+      "current_ifilter": 0.0,
+      "pos_kd": 0.0,
+      "pos_command_filter": 40.0,
+      "temperature_raw": 26.0,
+      "over_temp_threshold": 90.0
+    },
+    {
+      "joint": "joint4",
+      "pos_kp": 100.0,
+      "pos_fwd_kp": 20.0,
+      "pos_feedforward_time_const": 5.0,
+      "speed_kp": 200.0,
+      "speed_ki": 150.0,
+      "current_kp": 260.0,
+      "current_ki": 200.0,
+      "speed_ifilter": 0.0,
+      "speed_ofilter": 1.0,
+      "current_ifilter": 0.0,
+      "pos_kd": 0.0,
+      "pos_command_filter": 40.0,
+      "temperature_raw": 30.0,
+      "over_temp_threshold": 90.0
+    },
+    {
+      "joint": "joint5",
+      "pos_kp": 100.0,
+      "pos_fwd_kp": 20.0,
+      "pos_feedforward_time_const": 5.0,
+      "speed_kp": 200.0,
+      "speed_ki": 150.0,
+      "current_kp": 260.0,
+      "current_ki": 200.0,
+      "speed_ifilter": 0.0,
+      "speed_ofilter": 1.0,
+      "current_ifilter": 0.0,
+      "pos_kd": 0.0,
+      "pos_command_filter": 40.0,
+      "temperature_raw": 26.0,
+      "over_temp_threshold": 90.0
+    },
+    {
+      "joint": "joint6",
+      "pos_kp": 100.0,
+      "pos_fwd_kp": 20.0,
+      "pos_feedforward_time_const": 5.0,
+      "speed_kp": 200.0,
+      "speed_ki": 150.0,
+      "current_kp": 260.0,
+      "current_ki": 200.0,
+      "speed_ifilter": 0.0,
+      "speed_ofilter": 1.0,
+      "current_ifilter": 0.0,
+      "pos_kd": 0.0,
+      "pos_command_filter": 40.0,
+      "temperature_raw": 28.0,
+      "over_temp_threshold": 90.0
+    },
+    {
+      "joint": "joint7",
+      "pos_kp": 100.0,
+      "pos_fwd_kp": 20.0,
+      "pos_feedforward_time_const": 5.0,
+      "speed_kp": 200.0,
+      "speed_ki": 150.0,
+      "current_kp": 260.0,
+      "current_ki": 200.0,
+      "speed_ifilter": 0.0,
+      "speed_ofilter": 1.0,
+      "current_ifilter": 0.0,
+      "pos_kd": 0.0,
+      "pos_command_filter": 40.0,
+      "temperature_raw": 28.0,
+      "over_temp_threshold": 90.0
+    }
+  ],
+  "urdf_effort_limits": [],
+  "internal_controller_params": {
+    "lastPosition": [
+      234.459,
+      -19.788,
+      303.367,
+      -2.877904,
+      0.008941,
+      -0.224472
+    ],
+    "lastAngles": [
+      -0.07008,
+      -0.811428,
+      -0.090986,
+      0.223871,
+      0.242933,
+      1.030139,
+      -0.016233
+    ],
+    "mvvelo": 100.0,
+    "mvacc": 2000.0,
+    "tcpJerk": 7000.0,
+    "jointJerk": 200.0,
+    "angle_mvvelo": 0.3490658503988659,
+    "angle_mvacc": 8.726646259971648,
+    "mvtime": 0.0,
+    "LIMIT_VELO": [
+      0.10000000149011612,
+      1000.0
+    ],
+    "LIMIT_ACC": [
+      1.0,
+      50000.0
+    ],
+    "LIMIT_ANGLE_VELO": [
+      0.0010000000474974513,
+      3.1415927410125732
+    ],
+    "LIMIT_ANGLE_ACC": [
+      0.009999999776482582,
+      20.0
+    ]
+  },
+  "artifacts": {
+    "timeseries_csv": "/home/kotaro/my_projects/robot/RoboManipBaselines/robo_manip_baselines/measurements/xarm7_dynamics_20251016-140626.csv"
+  },
+  "notes": [
+    "Servo PID registers are provided as raw SDK values; convert or identify gains as needed when building simulators."
+  ]
+}
