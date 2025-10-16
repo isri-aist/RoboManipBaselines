@@ -82,3 +82,7 @@ python ./bin/Rollout.py PpoCus RealXarm7Demo \
   --config ./envs/configs/RealXarm7DemoEnv.yaml \
   --checkpoint ./checkpoint/PpoCus/Align/ckpt_976.pt
 ############################################################################
+
+
+
+python ./bin/CollectXarm7Dynamics.py --robot-ip 192.168.1.185 --duration 120 --sample-rate 200 --output-dir ./measurements
