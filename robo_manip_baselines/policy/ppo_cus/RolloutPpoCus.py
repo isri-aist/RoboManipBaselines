@@ -105,11 +105,16 @@ class FrontCameraDetectionWorker:
         base_to_camera: Optional[np.ndarray],
         intrinsic_info: Optional[Dict[str, Any]] = None,
         tag_size_m: float = DEFAULT_TAG_SIZE_M,
+        *,
+        debug_window_name: Optional[str] = None,
+        camera_name: Optional[str] = None,
     ):
         self._base_to_camera = None if base_to_camera is None else base_to_camera.astype(np.float64)
         self._intrinsic_info: Dict[str, Any] = intrinsic_info or {}
         self._tag_size_m = float(tag_size_m)
-        self._frame_queue: "queue.Queue[Optional[Tuple[np.ndarray, float]]]" = queue.Queue(maxsize=1)
+        self._frame_queue: "queue.Queue[Optional[Tuple[np.ndarray, np.ndarray, float]]]" = queue.Queue(
+            maxsize=1
+        )
         self._result_queue: "queue.Queue[Tuple[float, Dict[int, np.ndarray]]]" = queue.Queue(maxsize=1)
         self._stop_event = threading.Event()
         self._processing_thread: Optional[threading.Thread] = None
@@ -121,6 +126,9 @@ class FrontCameraDetectionWorker:
         self._latest_transforms_timestamp: Optional[float] = None
         self._latest_detection_timestamp: Optional[float] = None
         self._latest_detections: List[Dict[str, Any]] = []
+        self._debug_window_name = str(debug_window_name) if debug_window_name else None
+        self._debug_camera_name = str(camera_name) if camera_name else "front"
+        self._debug_initialized = False
         self._detector = None
         self._camera_matrix: Optional[np.ndarray] = None
         self._dist_coeffs: Optional[np.ndarray] = None
@@ -185,19 +193,25 @@ class FrontCameraDetectionWorker:
         with self._latest_lock:
             self._latest_detection_timestamp = None
             self._latest_detections = []
+        if self._debug_window_name:
+            try:
+                cv2.destroyWindow(self._debug_window_name)
+            except Exception:
+                pass
 
     def submit_frame(self, rgb_image: np.ndarray) -> None:
         if rgb_image is None or self._stop_event.is_set():
             return
 
-        gray_image = cv2.cvtColor(rgb_image, cv2.COLOR_BGR2GRAY)
+        color_image = rgb_image
+        gray_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2GRAY)
         timestamp = time.time()
 
         with self._latest_lock:
             self._latest_gray = gray_image
             self._latest_timestamp = timestamp
 
-        payload = (gray_image, timestamp)
+        payload = (color_image, gray_image, timestamp)
         try:
             self._frame_queue.put_nowait(payload)
         except queue.Full:
@@ -267,7 +281,7 @@ class FrontCameraDetectionWorker:
             if item is None:
                 break
 
-            gray_image, timestamp = item
+            color_image, gray_image, timestamp = item
             transforms: Dict[int, np.ndarray] = {}
             detection_entries: List[Dict[str, Any]] = []
 
@@ -371,6 +385,84 @@ class FrontCameraDetectionWorker:
                         self._result_queue.put_nowait(payload)
                     except queue.Full:
                         pass
+            self._render_debug_view(color_image, detection_entries, timestamp)
+
+    def _render_debug_view(
+        self,
+        color_image: Optional[np.ndarray],
+        detections: List[Dict[str, Any]],
+        timestamp: Optional[float],
+    ) -> None:
+        if self._debug_window_name is None:
+            return
+        if color_image is None:
+            return
+        if color_image.ndim != 3 or color_image.shape[2] < 3:
+            return
+
+        if not self._debug_initialized:
+            try:
+                cv2.namedWindow(self._debug_window_name, cv2.WINDOW_NORMAL)
+            except Exception:
+                pass
+            self._debug_initialized = True
+
+        debug_image = color_image.copy()
+        for entry in detections:
+            tag_id = entry.get("tag_id")
+            corners = entry.get("corners")
+            center = entry.get("center")
+            label_pos: Optional[Tuple[int, int]] = None
+
+            if corners is not None:
+                corners_arr = np.asarray(corners, dtype=np.int32).reshape(-1, 2)
+                cv2.polylines(
+                    debug_image,
+                    [corners_arr.reshape(-1, 1, 2)],
+                    True,
+                    (0, 255, 0),
+                    2,
+                    cv2.LINE_AA,
+                )
+                label_pos = tuple(corners_arr[0])
+
+            if center is not None:
+                center_pt = (int(center[0]), int(center[1]))
+                cv2.circle(
+                    debug_image,
+                    center_pt,
+                    4,
+                    (0, 0, 255),
+                    -1,
+                    cv2.LINE_AA,
+                )
+                label_pos = (center_pt[0] + 6, center_pt[1] - 6)
+
+            if tag_id is not None and label_pos is not None:
+                cv2.putText(
+                    debug_image,
+                    f"id:{tag_id}",
+                    label_pos,
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5,
+                    (0, 255, 255),
+                    1,
+                    cv2.LINE_AA,
+                )
+
+        if timestamp is not None:
+            cv2.putText(
+                debug_image,
+                f"{self._debug_camera_name}  t={timestamp:.2f}s",
+                (10, debug_image.shape[0] - 10),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                (255, 255, 255),
+                1,
+                cv2.LINE_AA,
+            )
+
+        cv2.imshow(self._debug_window_name, debug_image)
 
     def _build_detector(self):
         if self._detector is not None:
@@ -882,7 +974,6 @@ class RolloutPpoCus(RolloutBase):
 
         self._marker_worker = None
         self._marker_camera_active = None
-        self._marker_debug_window = f"{self.policy_name}_front_marker"
         self.marker_transform_cache: Dict[int, np.ndarray] = {}
         self.marker_detection_verified = False
         if _GLOBAL_T_BASE_TO_CAMERA is None:
@@ -916,6 +1007,8 @@ class RolloutPpoCus(RolloutBase):
                     base_to_camera=_GLOBAL_T_BASE_TO_CAMERA,
                     intrinsic_info=intrinsic_info,
                     tag_size_m=DEFAULT_TAG_SIZE_M,
+                    debug_window_name=f"{self.policy_name}_{camera_name}_marker",
+                    camera_name=camera_name,
                 )
                 self._marker_worker.start()
                 self._marker_camera_active = camera_name
@@ -1530,95 +1623,6 @@ class RolloutPpoCus(RolloutBase):
             self.policy_name,
             cv2.cvtColor(np.asarray(self.canvas.buffer_rgba()), cv2.COLOR_RGB2BGR),
         )
-        self._draw_marker_debug_view()
-
-    def _draw_marker_debug_view(self) -> None:
-        if getattr(self, "_marker_worker", None) is None:
-            return
-        if not isinstance(getattr(self, "info", None), dict):
-            return
-        rgb_images = self.info.get("rgb_images")
-        if not isinstance(rgb_images, dict):
-            return
-
-        camera_candidates: List[str] = []
-        if self._marker_camera_active:
-            camera_candidates.append(self._marker_camera_active)
-        camera_candidates.extend(
-            [name for name in self.marker_camera_names if name not in camera_candidates]
-        )
-        frame_rgb: Optional[np.ndarray] = None
-        selected_camera: Optional[str] = None
-        for name in camera_candidates:
-            frame_candidate = rgb_images.get(name)
-            if frame_candidate is None:
-                continue
-            frame_rgb = np.asarray(frame_candidate)
-            selected_camera = name
-            break
-        if frame_rgb is None or selected_camera is None:
-            return
-        if frame_rgb.ndim != 3 or frame_rgb.shape[2] < 3:
-            return
-
-        debug_image = cv2.cvtColor(frame_rgb.copy(), cv2.COLOR_RGB2BGR)
-        detections, timestamp = self.get_latest_marker_detections()
-
-        for det in detections:
-            tag_id = det.get("tag_id")
-            corners = det.get("corners")
-            center = det.get("center")
-            text_pos: Optional[Tuple[int, int]] = None
-
-            if corners is not None:
-                corners_arr = np.asarray(corners, dtype=np.int32).reshape(-1, 2)
-                cv2.polylines(
-                    debug_image,
-                    [corners_arr.reshape(-1, 1, 2)],
-                    True,
-                    (0, 255, 0),
-                    2,
-                    cv2.LINE_AA,
-                )
-                text_pos = tuple(corners_arr[0])
-
-            if center is not None:
-                center_pt = (int(center[0]), int(center[1]))
-                cv2.circle(
-                    debug_image,
-                    center_pt,
-                    4,
-                    (0, 0, 255),
-                    -1,
-                    cv2.LINE_AA,
-                )
-                text_pos = (center_pt[0] + 6, center_pt[1] - 6)
-
-            if tag_id is not None and text_pos is not None:
-                cv2.putText(
-                    debug_image,
-                    f"id:{tag_id}",
-                    text_pos,
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.5,
-                    (0, 255, 255),
-                    1,
-                    cv2.LINE_AA,
-                )
-
-        if timestamp is not None:
-            cv2.putText(
-                debug_image,
-                f"{selected_camera}  t={timestamp:.2f}s",
-                (10, debug_image.shape[0] - 10),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.5,
-                (255, 255, 255),
-                1,
-                cv2.LINE_AA,
-            )
-
-        cv2.imshow(self._marker_debug_window, debug_image)
 
     def print_statistics(self):
         super().print_statistics()
