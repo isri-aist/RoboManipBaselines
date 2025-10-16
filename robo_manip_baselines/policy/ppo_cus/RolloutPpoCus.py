@@ -119,8 +119,6 @@ class FrontCameraDetectionWorker:
         self._latest_transforms: Dict[int, np.ndarray] = {}
         self._latest_transform_times: Dict[int, float] = {}
         self._latest_transforms_timestamp: Optional[float] = None
-        self._latest_detection_timestamp: Optional[float] = None
-        self._latest_detections: List[Dict[str, Any]] = []
         self._detector = None
         self._camera_matrix: Optional[np.ndarray] = None
         self._dist_coeffs: Optional[np.ndarray] = None
@@ -182,9 +180,6 @@ class FrontCameraDetectionWorker:
                 self._result_queue.get_nowait()
             except queue.Empty:
                 break
-        with self._latest_lock:
-            self._latest_detection_timestamp = None
-            self._latest_detections = []
 
     def submit_frame(self, rgb_image: np.ndarray) -> None:
         if rgb_image is None or self._stop_event.is_set():
@@ -243,20 +238,6 @@ class FrontCameraDetectionWorker:
                 self._latest_transforms_timestamp = timestamp
         return copied, timestamp
 
-    def get_latest_detections(self) -> Tuple[List[Dict[str, Any]], Optional[float]]:
-        with self._latest_lock:
-            detections_copy: List[Dict[str, Any]] = []
-            for entry in self._latest_detections:
-                corners = entry.get("corners")
-                detections_copy.append(
-                    {
-                        "tag_id": entry.get("tag_id"),
-                        "center": entry.get("center"),
-                        "corners": None if corners is None else corners.copy(),
-                    }
-                )
-            return detections_copy, self._latest_detection_timestamp
-
     def _processing_loop(self):
         while not self._stop_event.is_set():
             try:
@@ -269,7 +250,6 @@ class FrontCameraDetectionWorker:
 
             gray_image, timestamp = item
             transforms: Dict[int, np.ndarray] = {}
-            detection_entries: List[Dict[str, Any]] = []
 
             if self._detection_available:
                 detector = self._build_detector()
@@ -314,40 +294,9 @@ class FrontCameraDetectionWorker:
                             f"[FrontCameraDetectionWorker] tag {pose.tag_id} transform:\n{matrix_str}",
                             flush=True,
                         )
-                        corners = getattr(pose, "corners", None)
-                        if corners is not None:
-                            corners_arr = np.asarray(corners, dtype=np.int32).reshape(-1, 2)
-                        else:
-                            corners_arr = None
-                        center = getattr(pose, "center", None)
-                        if center is not None:
-                            center_tuple = (int(center[0]), int(center[1]))
-                        elif corners_arr is not None:
-                            center_mean = np.mean(corners_arr, axis=0)
-                            center_tuple = (int(center_mean[0]), int(center_mean[1]))
-                        else:
-                            center_tuple = None
-                        detection_entries.append(
-                            {
-                                "tag_id": int(pose.tag_id),
-                                "corners": corners_arr,
-                                "center": center_tuple,
-                            }
-                        )
 
             payload = None
             with self._latest_lock:
-                self._latest_detection_timestamp = timestamp
-                self._latest_detections = [
-                    {
-                        "tag_id": entry["tag_id"],
-                        "center": entry["center"],
-                        "corners": None
-                        if entry["corners"] is None
-                        else entry["corners"].copy(),
-                    }
-                    for entry in detection_entries
-                ]
                 if transforms:
                     for tag_id, matrix in transforms.items():
                         self._latest_transforms[tag_id] = matrix.copy()
@@ -882,7 +831,6 @@ class RolloutPpoCus(RolloutBase):
 
         self._marker_worker = None
         self._marker_camera_active = None
-        self._marker_debug_window = f"{self.policy_name}_front_marker"
         self.marker_transform_cache: Dict[int, np.ndarray] = {}
         self.marker_detection_verified = False
         if _GLOBAL_T_BASE_TO_CAMERA is None:
@@ -1194,12 +1142,6 @@ class RolloutPpoCus(RolloutBase):
             if transforms is not None:
                 return transforms, timestamp
         return worker.get_latest_transforms()
-
-    def get_latest_marker_detections(self):
-        worker = getattr(self, "_marker_worker", None)
-        if worker is None:
-            return [], None
-        return worker.get_latest_detections()
 
     def get_state(self):
         extra_state_arrays: Dict[str, np.ndarray] = {}
@@ -1530,95 +1472,6 @@ class RolloutPpoCus(RolloutBase):
             self.policy_name,
             cv2.cvtColor(np.asarray(self.canvas.buffer_rgba()), cv2.COLOR_RGB2BGR),
         )
-        self._draw_marker_debug_view()
-
-    def _draw_marker_debug_view(self) -> None:
-        if getattr(self, "_marker_worker", None) is None:
-            return
-        if not isinstance(getattr(self, "info", None), dict):
-            return
-        rgb_images = self.info.get("rgb_images")
-        if not isinstance(rgb_images, dict):
-            return
-
-        camera_candidates: List[str] = []
-        if self._marker_camera_active:
-            camera_candidates.append(self._marker_camera_active)
-        camera_candidates.extend(
-            [name for name in self.marker_camera_names if name not in camera_candidates]
-        )
-        frame_rgb: Optional[np.ndarray] = None
-        selected_camera: Optional[str] = None
-        for name in camera_candidates:
-            frame_candidate = rgb_images.get(name)
-            if frame_candidate is None:
-                continue
-            frame_rgb = np.asarray(frame_candidate)
-            selected_camera = name
-            break
-        if frame_rgb is None or selected_camera is None:
-            return
-        if frame_rgb.ndim != 3 or frame_rgb.shape[2] < 3:
-            return
-
-        debug_image = cv2.cvtColor(frame_rgb.copy(), cv2.COLOR_RGB2BGR)
-        detections, timestamp = self.get_latest_marker_detections()
-
-        for det in detections:
-            tag_id = det.get("tag_id")
-            corners = det.get("corners")
-            center = det.get("center")
-            text_pos: Optional[Tuple[int, int]] = None
-
-            if corners is not None:
-                corners_arr = np.asarray(corners, dtype=np.int32).reshape(-1, 2)
-                cv2.polylines(
-                    debug_image,
-                    [corners_arr.reshape(-1, 1, 2)],
-                    True,
-                    (0, 255, 0),
-                    2,
-                    cv2.LINE_AA,
-                )
-                text_pos = tuple(corners_arr[0])
-
-            if center is not None:
-                center_pt = (int(center[0]), int(center[1]))
-                cv2.circle(
-                    debug_image,
-                    center_pt,
-                    4,
-                    (0, 0, 255),
-                    -1,
-                    cv2.LINE_AA,
-                )
-                text_pos = (center_pt[0] + 6, center_pt[1] - 6)
-
-            if tag_id is not None and text_pos is not None:
-                cv2.putText(
-                    debug_image,
-                    f"id:{tag_id}",
-                    text_pos,
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.5,
-                    (0, 255, 255),
-                    1,
-                    cv2.LINE_AA,
-                )
-
-        if timestamp is not None:
-            cv2.putText(
-                debug_image,
-                f"{selected_camera}  t={timestamp:.2f}s",
-                (10, debug_image.shape[0] - 10),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.5,
-                (255, 255, 255),
-                1,
-                cv2.LINE_AA,
-            )
-
-        cv2.imshow(self._marker_debug_window, debug_image)
 
     def print_statistics(self):
         super().print_statistics()
