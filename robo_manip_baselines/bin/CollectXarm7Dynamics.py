@@ -30,6 +30,11 @@ def parse_arguments() -> argparse.Namespace:
         help="Recording duration in seconds. Leave unset to run until interrupted.",
     )
     parser.add_argument(
+        "--collect-stream",
+        action="store_true",
+        help="Collect a live joint-state stream. If false and duration is unset, only static parameters are queried.",
+    )
+    parser.add_argument(
         "--sample-rate",
         type=float,
         default=100.0,
@@ -81,7 +86,13 @@ def connect_robot(robot_ip: str, report_type: str) -> XArmAPI:
     arm.connect()
     arm.clean_error()
     arm.motion_enable(enable=True)
-    arm.set_mode(0)
+    arm.ft_sensor_enable(1)
+    time.sleep(0.1)
+    arm.ft_sensor_set_zero()
+    arm.clean_gripper_error()
+    arm.set_gripper_mode(0)
+    arm.set_gripper_enable(True)
+    arm.set_mode(6)
     arm.set_state(0)
     # Allow the controller to populate the rich report buffers.
     time.sleep(0.5)
@@ -193,7 +204,6 @@ def collect_joint_stream(
 
         _sleep_remaining(loop_start, sample_period)
 
-    end_perf = time.perf_counter()
     end_wall_clock = datetime.now(timezone.utc).isoformat()
     total_time = records[-1]["elapsed_s"] if records else 0.0
     achieved_rate = (len(records) - 1) / total_time if len(records) > 1 and total_time > 0 else 0.0
@@ -285,6 +295,23 @@ def snapshot_controller_limits(arm: XArmAPI) -> Dict[str, object]:
     return limit_snapshot
 
 
+def fetch_internal_params(arm: XArmAPI) -> Dict[str, object]:
+    try:
+        params = arm.arm._get_params(is_radian=True)
+    except Exception:  # noqa: BLE001
+        return {}
+
+    formatted: Dict[str, object] = {}
+    for key, value in params.items():
+        if isinstance(value, (list, tuple)):
+            formatted[key] = [float(v) for v in value]
+        elif isinstance(value, (int, float)):
+            formatted[key] = float(value)
+        else:
+            formatted[key] = value
+    return formatted
+
+
 def main() -> None:
     args = parse_arguments()
     shutdown_flag = GracefulShutdown()
@@ -299,12 +326,15 @@ def main() -> None:
         urdf_limits = read_urdf_effort_limits(args.urdf_path)
         joint_labels = [item["joint"] for item in urdf_limits] if urdf_limits else [f"joint{i+1}" for i in range(7)]
 
-        stream_result = collect_joint_stream(
-            arm=arm,
-            sample_rate=args.sample_rate,
-            duration=args.duration,
-            shutdown_flag=shutdown_flag,
-        )
+        collect_stream = args.collect_stream or args.duration is not None
+        stream_result = None
+        if collect_stream:
+            stream_result = collect_joint_stream(
+                arm=arm,
+                sample_rate=args.sample_rate,
+                duration=args.duration,
+                shutdown_flag=shutdown_flag,
+            )
 
         output_dir = args.output_dir.resolve()
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -312,35 +342,42 @@ def main() -> None:
         csv_path = prefix.with_suffix(".csv")
         json_path = prefix.with_suffix(".json")
 
-        write_timeseries_csv(csv_path, stream_result["records"])
+        artifacts: Dict[str, Optional[str]] = {
+            "timeseries_csv": None,
+        }
+
+        if stream_result is not None and stream_result["records"]:
+            write_timeseries_csv(csv_path, stream_result["records"])
+            artifacts["timeseries_csv"] = str(csv_path)
 
         controller_limits = snapshot_controller_limits(arm)
         joint_summary = build_joint_summary(
             joint_labels=joint_labels,
-            max_velocity=stream_result["max_velocity_rad_s"],
-            max_acceleration=stream_result["max_acceleration_rad_s2"],
-            max_jerk=stream_result["max_jerk_rad_s3"],
+            max_velocity=stream_result["max_velocity_rad_s"] if stream_result else [0.0] * len(joint_labels),
+            max_acceleration=stream_result["max_acceleration_rad_s2"] if stream_result else [0.0] * len(joint_labels),
+            max_jerk=stream_result["max_jerk_rad_s3"] if stream_result else [0.0] * len(joint_labels),
         )
+        internal_params = fetch_internal_params(arm)
 
         summary_payload = {
             "metadata": {
                 "robot_ip": args.robot_ip,
-                "start_wall_time_utc": stream_result["start_wall_time_utc"],
-                "end_wall_time_utc": stream_result["end_wall_time_utc"],
-                "duration_s": stream_result["duration_s"],
-                "sample_count": stream_result["sample_count"],
+                "start_wall_time_utc": stream_result["start_wall_time_utc"] if stream_result else datetime.now(timezone.utc).isoformat(),
+                "end_wall_time_utc": stream_result["end_wall_time_utc"] if stream_result else datetime.now(timezone.utc).isoformat(),
+                "duration_s": stream_result["duration_s"] if stream_result else 0.0,
+                "sample_count": stream_result["sample_count"] if stream_result else 0,
                 "sample_rate_requested_hz": args.sample_rate,
-                "sample_rate_achieved_hz": stream_result["achieved_rate_hz"],
+                "sample_rate_achieved_hz": stream_result["achieved_rate_hz"] if stream_result else 0.0,
                 "report_type": args.report_type,
+                "stream_collected": bool(stream_result and stream_result["records"]),
             },
             "observed_joint_limits": joint_summary,
             "controller_reported_limits": controller_limits,
             "urdf_effort_limits": urdf_limits,
-            "artifacts": {
-                "timeseries_csv": str(csv_path),
-            },
+            "internal_controller_params": internal_params,
+            "artifacts": artifacts,
             "notes": [
-                "PD gains and jerk limits not exposed by the SDK must be identified separately if needed.",
+                "Controller parameters are queried via the xArm SDK; PD gains still require manual identification.",
             ],
         }
 
@@ -348,7 +385,8 @@ def main() -> None:
         with json_path.open("w") as json_file:
             json.dump(summary_payload, json_file, indent=2)
 
-        print(f"[CollectXarm7Dynamics] Wrote joint samples to {csv_path}")
+        if artifacts["timeseries_csv"]:
+            print(f"[CollectXarm7Dynamics] Wrote joint samples to {csv_path}")
         print(f"[CollectXarm7Dynamics] Wrote summary to {json_path}")
 
     finally:
