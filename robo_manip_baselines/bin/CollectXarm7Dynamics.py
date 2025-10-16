@@ -312,6 +312,45 @@ def fetch_internal_params(arm: XArmAPI) -> Dict[str, object]:
     return formatted
 
 
+def fetch_servo_pid_gains(arm: XArmAPI, joint_labels: List[str]) -> List[Dict[str, Optional[float]]]:
+    try:
+        code, pid_matrix = arm.arm.get_servo_all_pids()
+    except Exception:  # noqa: BLE001
+        return []
+
+    if code != 0 or not pid_matrix:
+        return []
+
+    register_names = [
+        "pos_kp",
+        "pos_fwd_kp",
+        "pos_feedforward_time_const",
+        "speed_kp",
+        "speed_ki",
+        "current_kp",
+        "current_ki",
+        "speed_ifilter",
+        "speed_ofilter",
+        "current_ifilter",
+        "pos_kd",
+        "pos_command_filter",
+        "temperature_raw",
+        "over_temp_threshold",
+    ]
+
+    gains: List[Dict[str, Optional[float]]] = []
+    for joint_idx, raw_values in enumerate(pid_matrix):
+        label = joint_labels[joint_idx] if joint_idx < len(joint_labels) else f"joint{joint_idx + 1}"
+        entry: Dict[str, Optional[float]] = {"joint": label}
+        for reg_idx, reg_name in enumerate(register_names):
+            try:
+                entry[reg_name] = float(raw_values[reg_idx])
+            except (ValueError, IndexError, TypeError):
+                entry[reg_name] = None
+        gains.append(entry)
+    return gains
+
+
 def main() -> None:
     args = parse_arguments()
     shutdown_flag = GracefulShutdown()
@@ -358,6 +397,7 @@ def main() -> None:
             max_jerk=stream_result["max_jerk_rad_s3"] if stream_result else [0.0] * len(joint_labels),
         )
         internal_params = fetch_internal_params(arm)
+        servo_pid_gains = fetch_servo_pid_gains(arm, joint_labels)
 
         summary_payload = {
             "metadata": {
@@ -373,11 +413,12 @@ def main() -> None:
             },
             "observed_joint_limits": joint_summary,
             "controller_reported_limits": controller_limits,
+            "servo_pid_registers": servo_pid_gains,
             "urdf_effort_limits": urdf_limits,
             "internal_controller_params": internal_params,
             "artifacts": artifacts,
             "notes": [
-                "Controller parameters are queried via the xArm SDK; PD gains still require manual identification.",
+                "Servo PID registers are provided as raw SDK values; convert or identify gains as needed when building simulators.",
             ],
         }
 
