@@ -92,7 +92,7 @@ def connect_robot(robot_ip: str, report_type: str) -> XArmAPI:
     arm.clean_gripper_error()
     arm.set_gripper_mode(0)
     arm.set_gripper_enable(True)
-    arm.set_mode(6)
+    arm.set_mode(1)
     arm.set_state(0)
     # Allow the controller to populate the rich report buffers.
     time.sleep(0.5)
