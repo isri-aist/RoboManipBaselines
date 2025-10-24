@@ -497,28 +497,28 @@ _NORMALIZED_ACTION_HIGH = torch.tensor(1.0, dtype=torch.float32)
 
 _DELTA_PHYSICAL_LOW = torch.tensor(
     [
-        -0.1,
-        -0.1,
-        -0.1,
-        -0.1,
-        -0.1,
-        -0.1,
-        -0.1,
-        -0.1,
+        -0.02,
+        -0.02,
+        -0.02,
+        -0.02,
+        -0.02,
+        -0.02,
+        -0.02,
+        -0.02,
     ],
     dtype=torch.float32,
 )
 
 _DELTA_PHYSICAL_HIGH = torch.tensor(
     [
-        0.1,
-        0.1,
-        0.1,
-        0.1,
-        0.1,
-        0.1,
-        0.1,
-        0.1,
+        0.02,
+        0.02,
+        0.02,
+        0.02,
+        0.02,
+        0.02,
+        0.02,
+        0.02,
     ],
     dtype=torch.float32,
 )
