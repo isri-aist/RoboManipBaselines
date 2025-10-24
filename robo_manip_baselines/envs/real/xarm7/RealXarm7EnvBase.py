@@ -164,13 +164,21 @@ class RealXarm7EnvBase(RealEnvBase):
         scaled_joint_vel_limit = (
             np.clip(joint_vel_limit_scale, 0.01, 10.0) * self.joint_vel_limit
         )
-        xarm_code = self.xarm_api.set_servo_angle(
-            angle=arm_joint_pos_command,
-            speed=scaled_joint_vel_limit,
-            mvtime=duration,
-            is_radian=True,
-            wait=False,
-        )
+
+        if True:
+            xarm_code = self.xarm_api.set_servo_angle_j(
+                arm_joint_pos_command,
+                speed=scaled_joint_vel_limit,  # set_servo_angle_j expects deg/s
+                is_radian=True,
+            )
+        else:
+            xarm_code = self.xarm_api.set_servo_angle(
+                angle=arm_joint_pos_command,
+                speed=scaled_joint_vel_limit,
+                mvtime=duration,
+                is_radian=True,
+                wait=False,
+            )
         if xarm_code != 0:
             raise RuntimeError(
                 f"[{self.__class__.__name__}] Invalid xArm API code: {xarm_code}"
