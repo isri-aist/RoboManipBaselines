@@ -79,7 +79,7 @@ python ./bin/CreatePpoCusMetaInfo.py \
 
 python ./bin/Rollout.py PpoCus RealXarm7Demo \
   --wait_before_start \
-  --skip_draw 50 \
+  --skip_draw 50000 \
   --save_rollout \
   --config ./envs/configs/RealXarm7DemoEnv.yaml \
   --checkpoint ./checkpoint/PpoCus/Align/ckpt_126.pt
