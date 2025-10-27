@@ -94,7 +94,7 @@ class RealXarm7EnvBase(RealEnvBase):
         self.xarm_api.ft_sensor_set_zero()
         time.sleep(0.2)
         self.xarm_api.clean_error()
-        self.xarm_api.set_mode(6)
+        self.xarm_api.set_mode(1)
         self.xarm_api.set_state(0)
         self.xarm_api.set_collision_sensitivity(1)
         self.xarm_api.clean_gripper_error()
@@ -167,7 +167,9 @@ class RealXarm7EnvBase(RealEnvBase):
             np.clip(joint_vel_limit_scale, 0.01, 10.0) * self.joint_vel_limit
         )
 
-        if True:
+
+        #print(f"self.xarm_api.mode:{self.xarm_api.mode}")
+        if self.xarm_api.mode==1:
             xarm_code = self.xarm_api.set_servo_angle_j(
                 arm_joint_pos_command,
                 speed=scaled_joint_vel_limit,  # set_servo_angle_j expects deg/s
