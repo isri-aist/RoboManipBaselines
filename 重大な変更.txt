@@ -1,3 +1,23 @@
 robo_manip_baselines/envs/real/RealEnvBase.py
 の107行目を変更しました。
 
+
+robo_manip_baselines/envs/real/xarm7/RealXarm7EnvBase.py
+の168~174に独自の条件分岐を与え、その前でも、set_mode(1)というように変更しました。
+
+robo_manip_baselines/envs/real/xarm7/RealXarm7EnvBase.py
+の以下の関数において、初期位置への移動前だけ、一瞬の間、モードを6に変更するように変更しました。
+
+
+    def _reset_robot(self):
+        print(
+            f"[{self.__class__.__name__}] Start moving the robot to the reset position."
+        )
+        self.xarm_api.set_mode(6)
+        self._set_action(
+            self.init_qpos, duration=None, joint_vel_limit_scale=0.1, wait=True
+        )
+        self.xarm_api.set_mode(1)
+        print(
+            f"[{self.__class__.__name__}] Finish moving the robot to the reset position."
+        )

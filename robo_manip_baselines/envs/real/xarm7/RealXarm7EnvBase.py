@@ -144,9 +144,11 @@ class RealXarm7EnvBase(RealEnvBase):
         print(
             f"[{self.__class__.__name__}] Start moving the robot to the reset position."
         )
+        self.xarm_api.set_mode(6)
         self._set_action(
             self.init_qpos, duration=None, joint_vel_limit_scale=0.1, wait=True
         )
+        self.xarm_api.set_mode(1)
         print(
             f"[{self.__class__.__name__}] Finish moving the robot to the reset position."
         )
