@@ -145,7 +145,16 @@ class RealXarm7EnvBase(RealEnvBase):
             f"[{self.__class__.__name__}] Start moving the robot to the reset position."
         )
         self.xarm_api.set_mode(6)
+        
+
+        
+        
         self.xarm_api.set_state(0)
+
+        print("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+        print(self.xarm_api.mode)
+
+        
         self._set_action(
             self.init_qpos, duration=None, joint_vel_limit_scale=0.1, wait=True
         )
@@ -172,6 +181,8 @@ class RealXarm7EnvBase(RealEnvBase):
 
         #print(f"self.xarm_api.mode:{self.xarm_api.mode}")
         if self.xarm_api.mode==1:
+
+            a = 1/0
             xarm_code = self.xarm_api.set_servo_angle_j(
                 arm_joint_pos_command,
                 speed=scaled_joint_vel_limit,  # set_servo_angle_j expects deg/s
