@@ -104,6 +104,7 @@ class RealEnvBase(EnvDataMixin, gym.Env, ABC):
         return observation, info
 
     def step(self, action):
+        print("stepから呼び出します。これが表示されれば正常")
         self._set_action(action, duration=self.dt, joint_vel_limit_scale=10.0, wait=True)
 
         observation = self._get_obs()

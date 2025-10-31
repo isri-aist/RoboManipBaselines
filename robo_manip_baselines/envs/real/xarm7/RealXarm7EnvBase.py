@@ -144,33 +144,32 @@ class RealXarm7EnvBase(RealEnvBase):
         print(
             f"[{self.__class__.__name__}] Start moving the robot to the reset position."
         )
-        self.xarm_api.set_mode(6)
-        
 
-        
-        
-        self.xarm_api.set_state(0)
+
+
 
         print("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
         print(self.xarm_api.mode)
 
         
         self._set_action(
-            self.init_qpos, duration=None, joint_vel_limit_scale=0.1, wait=True
+            self.init_qpos, duration=None, joint_vel_limit_scale=0.1, wait=True, reset_bool=True
         )
-        self.xarm_api.set_mode(1)
-        self.xarm_api.set_state(0)
+
+
+
         print(
             f"[{self.__class__.__name__}] Finish moving the robot to the reset position."
         )
 
-    def _set_action(self, action, duration=None, joint_vel_limit_scale=0.5, wait=False):
+    def _set_action(self, action, duration=None, joint_vel_limit_scale=0.5, wait=False, reset_bool = False):
         start_time = time.time()
 
         # Overwrite duration or joint_pos for safety
         action, duration = self.overwrite_command_for_safety(
             action, duration, joint_vel_limit_scale
         )
+
 
         # Send command to xArm7
         arm_joint_pos_command = action[self.body_config_list[0].arm_joint_idxes]
@@ -179,16 +178,16 @@ class RealXarm7EnvBase(RealEnvBase):
         )
 
 
-        #print(f"self.xarm_api.mode:{self.xarm_api.mode}")
-        if self.xarm_api.mode==1:
+        if reset_bool:
+            result = self.xarm_api.set_mode(6)
+            self.xarm_api.set_state(0)
+            
+            for _ in range(10):
+                time.sleep(0.2)
+                if self.xarm_api.mode == 6:
+                    print(self.xarm_api.mode)
+                    break
 
-            a = 1/0
-            xarm_code = self.xarm_api.set_servo_angle_j(
-                arm_joint_pos_command,
-                speed=scaled_joint_vel_limit,  # set_servo_angle_j expects deg/s
-                is_radian=True,
-            )
-        else:
             xarm_code = self.xarm_api.set_servo_angle(
                 angle=arm_joint_pos_command,
                 speed=scaled_joint_vel_limit,
@@ -196,6 +195,27 @@ class RealXarm7EnvBase(RealEnvBase):
                 is_radian=True,
                 wait=False,
             )
+
+
+            self.xarm_api.set_mode(1)
+            self.xarm_api.set_state(0)
+
+            time.sleep(0.2)
+            return None
+            
+        if self.xarm_api.mode==1:
+
+            xarm_code = self.xarm_api.set_servo_angle_j(
+                arm_joint_pos_command,
+                speed=scaled_joint_vel_limit,  # set_servo_angle_j expects deg/s
+                is_radian=True,
+            )
+
+        else:
+            raise ValueError("Unexpectedly xarm_api.mode != 1 in _set_action function")
+
+
+
         if xarm_code != 0:
             raise RuntimeError(
                 f"[{self.__class__.__name__}] Invalid xArm API code: {xarm_code}"
