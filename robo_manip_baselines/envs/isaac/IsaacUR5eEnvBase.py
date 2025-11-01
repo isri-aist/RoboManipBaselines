@@ -568,9 +568,19 @@ class IsaacUR5eEnvBase(EnvDataMixin, gym.Env, ABC):
         return list(self.camera_handles_list[self.rep_env_idx].keys())
 
     @property
+    def pointcloud_camera_names(self):
+        """Get pointcloud camera names."""
+        return []
+
+    @property
     def rgb_tactile_names(self):
         """Get names of tactile sensors with RGB output."""
         return []
+
+    @property
+    def intensity_tactile_names(self):
+        """Get names of tactile sensors with intensity output."""
+        return list(self.intensity_tactiles.keys())
 
     def get_camera_fovy(self, camera_name):
         """Get vertical field-of-view of the camera."""

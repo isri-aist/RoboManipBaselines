@@ -12,9 +12,6 @@ sys.path.append(
 from diffusion_policy.common.pytorch_util import dict_apply, optimizer_to
 from diffusion_policy.model.common.lr_scheduler import get_scheduler
 from diffusion_policy.model.diffusion.ema_model import EMAModel
-from diffusion_policy.policy.diffusion_unet_hybrid_image_policy import (
-    DiffusionUnetHybridImagePolicy,
-)
 from robo_manip_baselines.common import DataKey, TrainBase
 
 from .DiffusionPolicyDataset import DiffusionPolicyDataset
@@ -22,6 +19,30 @@ from .DiffusionPolicyDataset import DiffusionPolicyDataset
 
 class TrainDiffusionPolicy(TrainBase):
     DatasetClass = DiffusionPolicyDataset
+
+    def setup_args(self):
+        super().setup_args()
+
+        if self.args.backbone not in ("cnn", "transformer"):
+            raise ValueError(
+                f"[{self.__class__.__name__}] Invalid backbone: {self.args.backbone}"
+            )
+
+        if self.args.scheduler not in ("ddpm", "ddim"):
+            raise ValueError(
+                f"[{self.__class__.__name__}] Invalid scheduler: {self.args.scheduler}"
+            )
+
+        if self.args.backbone == "transformer" and self.args.scheduler == "ddim":
+            raise ValueError(
+                f"[{self.__class__.__name__}] The transformer backbone and ddim scheduler cannot be used simultaneously."
+            )
+
+        if self.args.horizon is None:
+            if self.args.backbone == "cnn":
+                self.args.horizon = 16
+            else:  # if self.args.backbone == "transformer"
+                self.args.horizon = 10
 
     def set_additional_args(self, parser):
         parser.set_defaults(enable_rmb_cache=True)
@@ -43,6 +64,13 @@ class TrainDiffusionPolicy(TrainBase):
             help="enable or disable exponential moving average (EMA)",
         )
         parser.add_argument(
+            "--backbone",
+            type=str,
+            default="cnn",
+            choices=["cnn", "transformer"],
+            help="type of model backbone ('cnn' or 'transformer')",
+        )
+        parser.add_argument(
             "--scheduler",
             type=str,
             default="ddpm",
@@ -51,7 +79,7 @@ class TrainDiffusionPolicy(TrainBase):
         )
 
         parser.add_argument(
-            "--horizon", type=int, default=16, help="prediction horizon"
+            "--horizon", type=int, default=None, help="prediction horizon"
         )
         parser.add_argument(
             "--n_obs_steps",
@@ -86,11 +114,13 @@ class TrainDiffusionPolicy(TrainBase):
 
         self.model_meta_info["data"]["image_size"] = self.args.image_size
         self.model_meta_info["data"]["image_crop_size"] = self.args.image_crop_size
+
         self.model_meta_info["data"]["horizon"] = self.args.horizon
         self.model_meta_info["data"]["n_obs_steps"] = self.args.n_obs_steps
         self.model_meta_info["data"]["n_action_steps"] = self.args.n_action_steps
 
         self.model_meta_info["policy"]["use_ema"] = self.args.use_ema
+        self.model_meta_info["policy"]["backbone"] = self.args.backbone
         self.model_meta_info["policy"]["scheduler"] = self.args.scheduler
 
     def get_extra_norm_config(self):
@@ -123,15 +153,36 @@ class TrainDiffusionPolicy(TrainBase):
             "horizon": self.args.horizon,
             "n_action_steps": self.args.n_action_steps,
             "n_obs_steps": self.args.n_obs_steps,
-            "obs_as_global_cond": True,
             "crop_shape": self.args.image_crop_size[::-1],  # (height, width)
-            "diffusion_step_embed_dim": 128,
-            "kernel_size": 5,
-            "n_groups": 8,
-            "cond_predict_scale": True,
             "obs_encoder_group_norm": True,
             "eval_fixed_crop": True,
         }
+        if self.args.backbone == "cnn":
+            self.model_meta_info["policy"]["args"].update(
+                {
+                    "num_inference_steps": 100,
+                    "down_dims": [512, 1024, 2048],
+                    "obs_as_global_cond": True,
+                    "diffusion_step_embed_dim": 128,
+                    "kernel_size": 5,
+                    "n_groups": 8,
+                    "cond_predict_scale": True,
+                }
+            )
+        else:  # if self.args.backbone == "transformer"
+            self.model_meta_info["policy"]["args"].update(
+                {
+                    "n_layer": 8,
+                    "n_cond_layers": 0,
+                    "n_head": 4,
+                    "n_emb": 256,
+                    "p_drop_emb": 0.0,
+                    "p_drop_attn": 0.3,
+                    "causal_attn": True,
+                    "time_as_cond": True,
+                    "obs_as_cond": True,
+                }
+            )
         self.model_meta_info["policy"]["noise_scheduler_args"] = {
             "beta_end": 0.02,
             "beta_schedule": "squaredcos_cap_v2",
@@ -141,16 +192,10 @@ class TrainDiffusionPolicy(TrainBase):
             "prediction_type": "epsilon",
         }
 
-        # Construct policy
+        # Construct scheduler
         if self.model_meta_info["policy"]["scheduler"] == "ddpm":
             from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
 
-            self.model_meta_info["policy"]["args"].update(
-                {
-                    "num_inference_steps": 100,
-                    "down_dims": [512, 1024, 2048],
-                }
-            )
             self.model_meta_info["policy"]["noise_scheduler_args"].update(
                 {
                     "variance_type": "fixed_small",
@@ -159,7 +204,7 @@ class TrainDiffusionPolicy(TrainBase):
             noise_scheduler = DDPMScheduler(
                 **self.model_meta_info["policy"]["noise_scheduler_args"]
             )
-        elif self.model_meta_info["policy"]["scheduler"] == "ddim":
+        else:  # if self.model_meta_info["policy"]["scheduler"] == "ddim"
             from diffusers.schedulers.scheduling_ddim import DDIMScheduler
 
             self.model_meta_info["policy"]["args"].update(
@@ -177,11 +222,21 @@ class TrainDiffusionPolicy(TrainBase):
             noise_scheduler = DDIMScheduler(
                 **self.model_meta_info["policy"]["noise_scheduler_args"]
             )
-        else:
-            raise ValueError(
-                f"[{self.__class__.__name__}] Invalid scheduler: {self.model_meta_info['policy']['scheduler']}"
+
+        # Construct policy
+        if self.args.backbone == "cnn":
+            from diffusion_policy.policy.diffusion_unet_hybrid_image_policy import (
+                DiffusionUnetHybridImagePolicy,
             )
-        self.policy = DiffusionUnetHybridImagePolicy(
+
+            PolicyClass = DiffusionUnetHybridImagePolicy
+        else:  # if self.args.backbone == "transformer"
+            from diffusion_policy.policy.diffusion_transformer_hybrid_image_policy import (
+                DiffusionTransformerHybridImagePolicy,
+            )
+
+            PolicyClass = DiffusionTransformerHybridImagePolicy
+        self.policy = PolicyClass(
             noise_scheduler=noise_scheduler,
             **self.model_meta_info["policy"]["args"],
         )
@@ -199,17 +254,30 @@ class TrainDiffusionPolicy(TrainBase):
             )
 
         # Construct optimizer
-        self.optimizer = torch.optim.AdamW(
-            self.policy.parameters(),
-            lr=self.args.lr,
-            weight_decay=self.args.weight_decay,
-            betas=(0.95, 0.999),
-            eps=1e-8,
-        )
+        if self.args.backbone == "cnn":
+            self.optimizer = torch.optim.AdamW(
+                self.policy.parameters(),
+                lr=self.args.lr,
+                weight_decay=self.args.weight_decay,
+                betas=(0.95, 0.999),
+                eps=1e-8,
+            )
+        else:  # if self.args.backbone == "transformer"
+            self.optimizer = self.policy.get_optimizer(
+                transformer_weight_decay=1e-3,
+                obs_encoder_weight_decay=1e-6,
+                learning_rate=self.args.lr,
+                betas=(0.9, 0.95),
+            )
+
+        if self.args.backbone == "cnn":
+            num_warmup_steps = 500
+        else:  # if self.args.backbone == "transformer"
+            num_warmup_steps = 1000
         self.lr_scheduler = get_scheduler(
             name="cosine",
             optimizer=self.optimizer,
-            num_warmup_steps=500,
+            num_warmup_steps=num_warmup_steps,
             num_training_steps=(len(self.train_dataloader) * self.args.num_epochs),
         )
 
@@ -221,7 +289,9 @@ class TrainDiffusionPolicy(TrainBase):
 
         # Print policy information
         self.print_policy_info()
-        print(f"  - use ema: {self.args.use_ema}, scheduler: {self.args.scheduler}")
+        print(
+            f"  - use ema: {self.args.use_ema}, backbone: {self.args.backbone}, scheduler: {self.args.scheduler}"
+        )
         print(
             f"  - horizon: {self.args.horizon}, obs steps: {self.args.n_obs_steps}, action steps: {self.args.n_action_steps}"
         )

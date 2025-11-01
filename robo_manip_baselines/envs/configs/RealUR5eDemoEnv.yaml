@@ -2,6 +2,11 @@ robot_ip: "192.168.11.4"
 camera_ids:
   front: "145522067924"
   hand: "153122070885"
+# pointcloud_camera_ids:
+#   front: 0
 # gelsight_ids:
 #   tactile_left: "GelSight Mini R0B 2BNK-CE0U: Ge"
 #   tactile_right: "GelSight Mini R0B 2BG8-0H3X: Ge"
+# sanwa_keyboard_ids:
+#   tactile_left: /dev/hidraw6
+#   tactile_right: /dev/hidraw9

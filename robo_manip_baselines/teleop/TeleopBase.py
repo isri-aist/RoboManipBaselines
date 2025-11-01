@@ -201,6 +201,8 @@ class TeleopBase(OperationDataMixin, ABC):
         self.env.reset(seed=self.args.seed)
         if self.args.target_task is not None:
             self.env.unwrapped.target_task = self.args.target_task
+        if self.args.world_random_factors is not None:
+            self.env.unwrapped.world_random_factors = self.args.world_random_factors
 
         # Setup motion manager
         self.motion_manager = self.MotionManagerClass(self.env)
@@ -239,12 +241,6 @@ class TeleopBase(OperationDataMixin, ABC):
             self.pointcloud_scatter_list = [None] * len(self.env.unwrapped.camera_names)
 
         if self.args.plot_tactile:
-            if "Mujoco" not in self.env.unwrapped.__class__.__name__:
-                raise RuntimeError(
-                    f"[{self.__class__.__name__}] The '--plot_tactile' option is only valid in the MuJoCo environment. "
-                    f"env: {self.env.unwrapped.__class__.__name__}"
-                )
-
             if len(self.env.unwrapped.intensity_tactile_names) > 0:
                 plt.rcParams["keymap.quit"] = ["q", "escape"]
                 fig, self.ax_tactile = plt.subplots(
@@ -343,6 +339,13 @@ class TeleopBase(OperationDataMixin, ABC):
             type=float,
             default=None,
             help="random scale of simulation world (no randomness by default)",
+        )
+        parser.add_argument(
+            "--world_random_factors",
+            nargs="*",
+            type=str,
+            default=None,
+            help="list of randomization factors applied to simulation world (no randomness by default)",
         )
 
         parser.add_argument(
@@ -584,7 +587,9 @@ class TeleopBase(OperationDataMixin, ABC):
         rgb_images = []
         depth_images = []
         for camera_name in (
-            self.env.unwrapped.camera_names + self.env.unwrapped.rgb_tactile_names
+            self.env.unwrapped.camera_names
+            + self.env.unwrapped.rgb_tactile_names
+            + self.env.unwrapped.pointcloud_camera_names
         ):
             rgb_image = self.info["rgb_images"][camera_name]
             image_ratio = rgb_image.shape[1] / rgb_image.shape[0]
@@ -659,7 +664,9 @@ class TeleopBase(OperationDataMixin, ABC):
         plt.pause(0.001)
 
     def draw_tactile(self, vmin=-50.0, vmax=50.0):
-        for tactile_name, ax in zip(self.info["intensity_tactile"], self.ax_tactile):
+        for tactile_name, ax in zip(
+            self.env.unwrapped.intensity_tactile_names, self.ax_tactile
+        ):
             tactile_data = self.info["intensity_tactile"][tactile_name]
             ax.clear()
             ax.axis("off")

@@ -45,8 +45,7 @@ class RolloutMlp(RolloutBase):
         self.images_buf = None
         self.policy_action_buf = None
 
-    def get_state(self):
-        # Get latest value
+    def update_state_buf(self):
         if len(self.state_keys) == 0:
             state = np.zeros(0, dtype=np.float32)
         else:
@@ -60,7 +59,6 @@ class RolloutMlp(RolloutBase):
         state = normalize_data(state, self.model_meta_info["state"])
         state = torch.tensor(state, dtype=torch.float32)
 
-        # Store and return
         if self.state_buf is None:
             self.state_buf = [
                 state for _ in range(self.model_meta_info["data"]["n_obs_steps"])
@@ -69,12 +67,10 @@ class RolloutMlp(RolloutBase):
             self.state_buf.pop(0)
             self.state_buf.append(state)
 
-        state = torch.stack(self.state_buf, dim=0)[torch.newaxis].to(self.device)
+    def get_state(self):
+        return torch.stack(self.state_buf, dim=0)[torch.newaxis].to(self.device)
 
-        return state
-
-    def get_images(self):
-        # Get latest value
+    def update_images_buf(self):
         images = []
         for camera_name in self.camera_names:
             image = self.info["rgb_images"][camera_name]
@@ -85,7 +81,6 @@ class RolloutMlp(RolloutBase):
 
             images.append(image)
 
-        # Store and return
         if self.images_buf is None:
             self.images_buf = [
                 [image for _ in range(self.model_meta_info["data"]["n_obs_steps"])]
@@ -96,16 +91,19 @@ class RolloutMlp(RolloutBase):
                 single_images_buf.pop(0)
                 single_images_buf.append(image)
 
-        images = torch.stack(
+    def get_images(self):
+        return torch.stack(
             [
                 torch.stack(single_images_buf, dim=0)[torch.newaxis].to(self.device)
                 for single_images_buf in self.images_buf
             ]
         )
 
-        return images
-
     def infer_policy(self):
+        # Update observation buffer
+        self.update_state_buf()
+        self.update_images_buf()
+
         # Infer
         if self.policy_action_buf is None or len(self.policy_action_buf) == 0:
             state = self.get_state()

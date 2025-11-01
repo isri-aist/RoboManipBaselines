@@ -33,6 +33,31 @@ class MujocoXarm7PushtEnv(MujocoXarm7EnvBase):
             ]
         )  # [m]
 
+    def quat_to_yaw(self, q):
+        siny = 2 * (q[0] * q[3] + q[1] * q[2])
+        cosy = 1 - 2 * (q[2] ** 2 + q[3] ** 2)
+
+        return np.arctan2(siny, cosy)
+
+    def _get_reward(self):
+        tblock_pos = self.data.body("tblock").xpos.copy()
+        tblock_quat = self.data.body("tblock").xquat.copy()
+        target_pos = self.data.body("target_region").xpos.copy()
+        target_quat = self.data.body("target_region").xquat.copy()
+
+        xy_thre = 0.03  # [m]
+        xy_success = np.linalg.norm(tblock_pos[:2] - target_pos[:2]) < xy_thre
+
+        yaw_tblock = self.quat_to_yaw(tblock_quat)
+        yaw_target = self.quat_to_yaw(target_quat)
+        yaw_diff = np.arctan2(
+            np.sin(yaw_tblock - yaw_target), np.cos(yaw_tblock - yaw_target)
+        )
+        rot_thre = np.deg2rad(5)
+        rot_success = np.abs(yaw_diff) < rot_thre
+
+        return 1.0 if xy_success and rot_success else 0.0
+
     def modify_world(self, world_idx=None, cumulative_idx=None):
         if world_idx is None:
             world_idx = cumulative_idx % len(self.tblock_pos_offsets)

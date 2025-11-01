@@ -1,5 +1,3 @@
-import glob
-
 import numpy as np
 
 from .InputDeviceBase import InputDeviceBase
@@ -12,40 +10,12 @@ class GelloInputDevice(InputDeviceBase):
     Ref: https://github.com/wuphilipp/gello_software/blob/daae81f4a78ec0f7534937413345d96d3e1bc7fc/experiments/run_env.py
     """
 
-    PORT_CONFIG_MAP = {
-        "/dev/serial/by-id/usb-FTDI_USB__-__Serial_Converter_FT9MIQNO-if00-port0": dict(
-            joint_ids=(1, 2, 3, 4, 5, 6),
-            joint_offsets=(
-                -1 * np.pi / 2,
-                3 * np.pi / 2,
-                2 * np.pi / 2,
-                3 * np.pi / 2,
-                2 * np.pi / 2,
-                -1 * np.pi / 2,
-            ),
-            joint_signs=(1, 1, -1, 1, 1, 1),
-            gripper_config=(7, 197.378125, 155.578125),
-        ),
-        "/dev/serial/by-id/usb-FTDI_USB__-__Serial_Converter_FT9MG5IM-if00-port0": dict(
-            joint_ids=(1, 2, 3, 4, 5, 6),
-            joint_offsets=(
-                1 * np.pi / 2,
-                3 * np.pi / 2,
-                2 * np.pi / 2,
-                3 * np.pi / 2,
-                2 * np.pi / 2,
-                5 * np.pi / 2,
-            ),
-            joint_signs=(1, 1, -1, 1, 1, 1),
-            gripper_config=(7, 200.278515625, 158.478515625),
-        ),
-    }
-
-    def __init__(self, arm_manager, port=None):
+    def __init__(self, arm_manager, port, config):
         super().__init__()
 
         self.arm_manager = arm_manager
         self.port = port
+        self.config = config
 
     def connect(self):
         if self.connected:
@@ -55,20 +25,10 @@ class GelloInputDevice(InputDeviceBase):
 
         from gello.agents.gello_agent import DynamixelRobotConfig, GelloAgent
 
-        # Set port
-        if self.port is None:
-            usb_ports = glob.glob("/dev/serial/by-id/*")
-            if len(usb_ports) > 0:
-                self.port = usb_ports[0]
-                print(
-                    f"[{self.__class__.__name__}] Found {len(usb_ports)} ports in /dev/serial/by-id/*."
-                )
-            else:
-                raise RuntimeError(f"[{self.__class__.__name__}] No port found.")
         print(f"[{self.__class__.__name__}] Connect to {self.port}")
 
         # Instantiate gello agent
-        dynamixel_config = DynamixelRobotConfig(**self.PORT_CONFIG_MAP[self.port])
+        dynamixel_config = DynamixelRobotConfig(**self.config)
         current_joint_pos = np.concatenate(self.arm_manager.get_command_joint_pos())
         self.agent = GelloAgent(
             port=self.port,

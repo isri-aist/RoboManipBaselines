@@ -1,3 +1,4 @@
+import cv2
 import numpy as np
 import torch
 
@@ -7,12 +8,11 @@ from robo_manip_baselines.common import (
     DpStyleDatasetMixin,
     RmbData,
     get_skipped_data_seq,
-    normalize_data,
 )
 
 
-class DiffusionPolicy3dDataset(DatasetBase, DpStyleDatasetMixin):
-    """Dataset to train 3D diffusion policy."""
+class ManiFlowImageDataset(DatasetBase, DpStyleDatasetMixin):
+    """Dataset to train maniflow policy with image."""
 
     def setup_variables(self):
         self.setup_dp_style_chunk()
@@ -52,36 +52,52 @@ class DiffusionPolicy3dDataset(DatasetBase, DpStyleDatasetMixin):
                 axis=1,
             )
 
-            # Load pointcloud
-            camera_name = self.model_meta_info["image"]["camera_names"][0]
-            pointcloud = rmb_data[DataKey.get_pointcloud_key(camera_name)][::skip][
-                time_idxes
-            ]
+            # Load images
+            images = np.stack(
+                [
+                    rmb_data[DataKey.get_rgb_image_key(camera_name)][::skip][time_idxes]
+                    for camera_name in self.model_meta_info["image"]["camera_names"]
+                ],
+                axis=0,
+            )
+
+        # Resize images
+        K, T, H, W, C = images.shape
+        image_size = self.model_meta_info["data"]["image_size"]
+        images = np.array(
+            [cv2.resize(img, image_size) for img in images.reshape(-1, H, W, C)]
+        ).reshape(K, T, *image_size[::-1], C)
 
         # Pre-convert data
-        state, action, pointcloud = self.pre_convert_data(state, action, pointcloud)
+        state, action, images = self.pre_convert_data(state, action, images)
 
         # Convert to tensor
         state_tensor = torch.tensor(state, dtype=torch.float32)
         action_tensor = torch.tensor(action, dtype=torch.float32)
-        pointcloud_tensor = torch.tensor(pointcloud, dtype=torch.float32)
+        images_tensor = torch.tensor(images, dtype=torch.uint8)
 
         # Augment data
-        state_tensor, action_tensor, _ = self.augment_data(
-            state_tensor, action_tensor, None
+        state_tensor, action_tensor, images_tensor = self.augment_data(
+            state_tensor, action_tensor, images_tensor
         )
 
         # Convert to data structure of policy input and output
         data = {"obs": {}, "action": action_tensor}
         if len(self.model_meta_info["state"]["keys"]) > 0:
             data["obs"]["state"] = state_tensor
-        data["obs"]["point_cloud"] = pointcloud_tensor
+        for camera_idx, camera_name in enumerate(
+            self.model_meta_info["image"]["camera_names"]
+        ):
+            data["obs"][DataKey.get_rgb_image_key(camera_name)] = images_tensor[
+                camera_idx
+            ]
+
         return data
 
-    def pre_convert_data(self, state, action, pointcloud):
-        """Pre-convert data. Arguments must be numpy arrays (not torch tensors)."""
-        state = normalize_data(state, self.model_meta_info["state"])
-        action = normalize_data(action, self.model_meta_info["action"])
-        pointcloud = normalize_data(pointcloud, self.model_meta_info["pointcloud"])
+    def augment_data(self, state, action, images):
+        state, action, images = super().augment_data(state, action, images)
 
-        return state, action, pointcloud
+        # Adjust to a range from -1 to 1 to match the original implementation
+        images = images * 2.0 - 1.0
+
+        return state, action, images

@@ -153,6 +153,8 @@ class RolloutBase(OperationDataMixin, ABC):
         self.demo_name = self.args.demo_name or remove_suffix(self.env.spec.name, "Env")
         if self.args.target_task is not None:
             self.env.unwrapped.target_task = self.args.target_task
+        if self.args.world_random_factors is not None:
+            self.env.unwrapped.world_random_factors = self.args.world_random_factors
 
         # Setup policy
         self.setup_model_meta_info()
@@ -220,6 +222,13 @@ class RolloutBase(OperationDataMixin, ABC):
             type=float,
             default=None,
             help="random scale of simulation world (no randomness by default)",
+        )
+        parser.add_argument(
+            "--world_random_factors",
+            nargs="*",
+            type=str,
+            default=None,
+            help="list of randomization factors applied to simulation world (no randomness by default)",
         )
 
         parser.add_argument(
@@ -392,7 +401,7 @@ class RolloutBase(OperationDataMixin, ABC):
             self.action_plot_scale = np.zeros(0)
 
     def setup_variables(self):
-        self.image_transforms = v2.ToDtype(torch.float32, scale=True)
+        self.image_transforms = v2.Compose([v2.ToDtype(torch.float32, scale=True)])
 
     def reset_variables(self):
         self.policy_action_list = np.empty((0, self.action_dim))

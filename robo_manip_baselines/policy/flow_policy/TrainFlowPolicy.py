@@ -4,30 +4,30 @@ import os
 import sys
 
 import torch
-from diffusers.schedulers.scheduling_ddim import DDIMScheduler
 from omegaconf import OmegaConf
 from tqdm import tqdm
 
 sys.path.append(
     os.path.join(
         os.path.dirname(__file__),
-        "../../../third_party/3D-Diffusion-Policy/3D-Diffusion-Policy",
+        "../../../third_party/FlowPolicy/FlowPolicy",
     )
 )
-from diffusion_policy_3d.common.pytorch_util import dict_apply, optimizer_to
-from diffusion_policy_3d.model.common.lr_scheduler import get_scheduler
-from diffusion_policy_3d.model.diffusion.ema_model import EMAModel
-from diffusion_policy_3d.policy.dp3 import DP3
+from flow_policy_3d.common.pytorch_util import dict_apply, optimizer_to
+from flow_policy_3d.model.common.lr_scheduler import get_scheduler
+from flow_policy_3d.model.flow.ema_model import EMAModel
+from flow_policy_3d.policy.flowpolicy import FlowPolicy
+
 from robo_manip_baselines.common import (
     TrainBase,
     TrainPointCloudMixin,
 )
 
-from .DiffusionPolicy3dDataset import DiffusionPolicy3dDataset
+from .FlowPolicyDataset import FlowPolicyDataset
 
 
-class TrainDiffusionPolicy3d(TrainBase, TrainPointCloudMixin):
-    DatasetClass = DiffusionPolicy3dDataset
+class TrainFlowPolicy(TrainBase, TrainPointCloudMixin):
+    DatasetClass = FlowPolicyDataset
 
     def set_additional_args(self, parser):
         for action in parser._actions:
@@ -39,7 +39,7 @@ class TrainDiffusionPolicy3d(TrainBase, TrainPointCloudMixin):
         parser.set_defaults(norm_type="limits")
 
         parser.set_defaults(batch_size=128)
-        parser.set_defaults(num_epochs=3000)
+        parser.set_defaults(num_epochs=2000)
         parser.set_defaults(lr=1e-4)
 
         parser.add_argument(
@@ -53,9 +53,7 @@ class TrainDiffusionPolicy3d(TrainBase, TrainPointCloudMixin):
             help="Enable or disable exponential moving average (EMA)",
         )
 
-        parser.add_argument(
-            "--horizon", type=int, default=16, help="prediction horizon"
-        )
+        parser.add_argument("--horizon", type=int, default=8, help="prediction horizon")
         parser.add_argument(
             "--n_obs_steps",
             type=int,
@@ -65,7 +63,7 @@ class TrainDiffusionPolicy3d(TrainBase, TrainPointCloudMixin):
         parser.add_argument(
             "--n_action_steps",
             type=int,
-            default=8,
+            default=4,
             help="number of steps in the action sequence to output from the policy",
         )
 
@@ -147,6 +145,16 @@ class TrainDiffusionPolicy3d(TrainBase, TrainPointCloudMixin):
                 "normal_channel": False,
             }
         )
+        flow_match_conf = OmegaConf.create(
+            {
+                "eps": 1e-2,
+                "num_segments": 2,
+                "boundary": 1,
+                "delta": 1e-2,
+                "alpha": 1e-5,
+                "num_inference_step": 1,
+            }
+        )
         self.model_meta_info["policy"]["args"] = {
             "shape_meta": shape_meta,
             "horizon": self.args.horizon,
@@ -158,27 +166,19 @@ class TrainDiffusionPolicy3d(TrainBase, TrainPointCloudMixin):
             "down_dims": [512, 1024, 2048],
             "kernel_size": 5,
             "n_groups": 8,
-            "pointcloud_encoder_cfg": pointcloud_encoder_conf,
-            "use_pc_color": self.args.use_pc_color,
+            "condition_type": "film",
+            "use_down_condition": True,
+            "use_mid_condition": True,
+            "use_up_condition": True,
             "encoder_output_dim": self.args.encoder_output_dim,
-        }
-        self.model_meta_info["policy"]["noise_scheduler_args"] = {
-            "beta_end": 0.02,
-            "beta_schedule": "squaredcos_cap_v2",
-            "beta_start": 0.0001,
-            "clip_sample": True,
-            "num_train_timesteps": 100,
-            "set_alpha_to_one": True,
-            "prediction_type": "sample",
-            "steps_offset": 0,
+            "use_pc_color": self.args.use_pc_color,
+            "pointnet_type": "mlp",
+            "pointcloud_encoder_cfg": pointcloud_encoder_conf,
+            "Conditional_ConsistencyFM": flow_match_conf,
         }
 
         # Construct policy
-        noise_scheduler = DDIMScheduler(
-            **self.model_meta_info["policy"]["noise_scheduler_args"]
-        )
-        self.policy = DP3(
-            noise_scheduler=noise_scheduler,
+        self.policy = FlowPolicy(
             **self.model_meta_info["policy"]["args"],
         )
 

@@ -6,7 +6,7 @@ Install RoboManipBaselines:
 ```console
 $ git clone git@github.com:isri-aist/RoboManipBaselines.git --recursive
 $ cd RoboManipBaselines
-$ pip install -e .[act] --use-deprecated=legacy-resolver
+$ pip install -e .[act]
 ```
 
 Install ACT from a third party:

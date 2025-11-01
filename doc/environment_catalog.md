@@ -52,7 +52,7 @@ https://github.com/user-attachments/assets/6435a06d-fcd2-45ec-88da-5a26852dd4d8
 #### MujocoUR5ePick
 Task to pick up objects (9 types) and place them into baskets (2 types).
 
-https://github.com/user-attachments/assets/2f031b4e-bfc4-4e75-97db-af5440921936
+https://github.com/user-attachments/assets/77ad9c36-4cda-4a09-a799-205386ed682c
 
 ### Dual UR5e
 #### MujocoUR5eDualCable

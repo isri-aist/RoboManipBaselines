@@ -5,15 +5,15 @@ import cv2
 import matplotlib.pylab as plt
 import numpy as np
 import torch
-from diffusers.schedulers.scheduling_ddim import DDIMScheduler
 
 sys.path.append(
     os.path.join(
         os.path.dirname(__file__),
-        "../../../third_party/3D-Diffusion-Policy/3D-Diffusion-Policy",
+        "../../../third_party/FlowPolicy/FlowPolicy",
     )
 )
-from diffusion_policy_3d.policy.dp3 import DP3
+from flow_policy_3d.policy.flowpolicy import FlowPolicy
+
 from robo_manip_baselines.common import (
     RolloutBase,
     convert_depth_image_to_pointcloud,
@@ -28,7 +28,7 @@ from robo_manip_baselines.common.utils.Vision3dUtils import (
 )
 
 
-class RolloutDiffusionPolicy3d(RolloutBase):
+class RolloutFlowPolicy(RolloutBase):
     def set_additional_args(self, parser):
         parser.add_argument(
             "--plot_colored_pointcloud",
@@ -49,11 +49,7 @@ class RolloutDiffusionPolicy3d(RolloutBase):
         )
 
         # Construct policy
-        noise_scheduler = DDIMScheduler(
-            **self.model_meta_info["policy"]["noise_scheduler_args"]
-        )
-        self.policy = DP3(
-            noise_scheduler=noise_scheduler,
+        self.policy = FlowPolicy(
             **self.model_meta_info["policy"]["args"],
         )
 

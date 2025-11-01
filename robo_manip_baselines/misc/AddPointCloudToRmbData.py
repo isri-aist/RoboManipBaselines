@@ -94,7 +94,7 @@ class AddPointCloudToRmbData:
         self.image_size = image_size
         self.min_bound = min_bound
         self.max_bound = max_bound
-        self.rpy = rpy_angle
+        self.rpy_angle = rpy_angle
         self.num_points = num_points
         self.overwrite = overwrite
 
@@ -115,44 +115,72 @@ class AddPointCloudToRmbData:
                             f"[{self.__class__.__name__}] Pointcloud already exists: {rmb_path} (use --overwrite to replace)"
                         )
 
+                if pc_key + "_raw" in rmb_data.keys():
+                    self.raw_pointcloud_exist = True
+                    self.image_size = [-1, -1]
+                else:
+                    self.raw_pointcloud_exist = False
+
                 pointclouds = self.get_pointclouds(rmb_data)
 
                 rmb_data.h5file[pc_key] = pointclouds
                 rmb_data.attrs[pc_key + "_image_size"] = self.image_size
                 rmb_data.attrs[pc_key + "_min_bound"] = self.min_bound
                 rmb_data.attrs[pc_key + "_max_bound"] = self.max_bound
-                rmb_data.attrs[pc_key + "_rpy_angle"] = self.rpy
+                rmb_data.attrs[pc_key + "_rpy_angle"] = self.rpy_angle
 
     def get_pointclouds(self, rmb_data):
-        # Load images
-        rgb_image_seq = rmb_data[DataKey.get_rgb_image_key(self.camera_name)][:]
-        depth_image_seq = rmb_data[DataKey.get_depth_image_key(self.camera_name)][:]
-        fovy = rmb_data.attrs[DataKey.get_depth_image_key(self.camera_name) + "_fovy"]
-
-        # Resize images
-        rgb_image_seq = np.array(
-            [cv2.resize(image, self.image_size) for image in rgb_image_seq]
-        )
-        depth_image_seq = np.array(
-            [cv2.resize(image, self.image_size) for image in depth_image_seq]
-        )
-
-        # Generate pointcloud
         pointclouds = []
-        for rgb_image, depth_image in zip(rgb_image_seq, depth_image_seq):
-            # Convert to pointcloud
-            pointcloud = np.concat(
-                convert_depth_image_to_pointcloud(depth_image, fovy, rgb_image),
-                axis=1,
+
+        if self.raw_pointcloud_exist:
+            pc_key = DataKey.get_pointcloud_key(self.camera_name)
+            raw_pointclouds = rmb_data[pc_key + "_raw"][:]
+            for i in range(len(raw_pointclouds)):
+                # Get pointcloud
+                pointcloud = raw_pointclouds[i]
+
+                # Crop and downsample pointcloud
+                rotmat = euler_to_rotation_matrix(self.rpy_angle)
+                pointcloud = rotate_pointcloud(pointcloud, rotmat)
+                pointcloud = crop_pointcloud_bb(
+                    pointcloud, self.min_bound, self.max_bound
+                )
+                pointcloud = downsample_pointcloud_fps(pointcloud, self.num_points)
+
+                pointclouds.append(pointcloud)
+        else:
+            # Load images
+            rgb_image_seq = rmb_data[DataKey.get_rgb_image_key(self.camera_name)][:]
+            depth_image_seq = rmb_data[DataKey.get_depth_image_key(self.camera_name)][:]
+            fovy = rmb_data.attrs[
+                DataKey.get_depth_image_key(self.camera_name) + "_fovy"
+            ]
+
+            # Resize images
+            rgb_image_seq = np.array(
+                [cv2.resize(image, self.image_size) for image in rgb_image_seq]
+            )
+            depth_image_seq = np.array(
+                [cv2.resize(image, self.image_size) for image in depth_image_seq]
             )
 
-            # Crop and downsample pointcloud
-            rotmat = euler_to_rotation_matrix(self.rpy)
-            pointcloud = rotate_pointcloud(pointcloud, rotmat)
-            pointcloud = crop_pointcloud_bb(pointcloud, self.min_bound, self.max_bound)
-            pointcloud = downsample_pointcloud_fps(pointcloud, self.num_points)
+            # Generate pointcloud
+            for rgb_image, depth_image in zip(rgb_image_seq, depth_image_seq):
+                # Convert to pointcloud
+                pointcloud = np.concat(
+                    convert_depth_image_to_pointcloud(depth_image, fovy, rgb_image),
+                    axis=1,
+                )
 
-            pointclouds.append(pointcloud)
+                # Crop and downsample pointcloud
+                rotmat = euler_to_rotation_matrix(self.rpy_angle)
+                pointcloud = rotate_pointcloud(pointcloud, rotmat)
+                pointcloud = crop_pointcloud_bb(
+                    pointcloud, self.min_bound, self.max_bound
+                )
+                pointcloud = downsample_pointcloud_fps(pointcloud, self.num_points)
+
+                pointclouds.append(pointcloud)
 
         return np.array(pointclouds)
 

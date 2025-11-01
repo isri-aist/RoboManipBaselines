@@ -11,8 +11,8 @@ from robo_manip_baselines.common import (
 )
 
 
-class DiffusionPolicy3dDataset(DatasetBase, DpStyleDatasetMixin):
-    """Dataset to train 3D diffusion policy."""
+class FlowPolicyDataset(DatasetBase, DpStyleDatasetMixin):
+    """Dataset to train flow policy."""
 
     def setup_variables(self):
         self.setup_dp_style_chunk()

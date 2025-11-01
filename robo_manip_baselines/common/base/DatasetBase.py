@@ -100,10 +100,13 @@ class DatasetBase(torch.utils.data.Dataset):
             elif images.ndim == 3:
                 images = self.image_transforms(images)
             else:
-                original_shape = images.shape
-                new_shape = (-1, *original_shape[-3:])
-                images = torch.stack(
-                    [self.image_transforms(image) for image in images.view(new_shape)]
-                ).view(original_shape)
+                orig_prefix_shape = images.shape[:-3]
+                orig_image_list = images.reshape(-1, *images.shape[-3:])
+                transformed_image_list = [
+                    self.image_transforms(img) for img in orig_image_list
+                ]
+                images = torch.stack(transformed_image_list)
+                new_img_shape = images.shape[-3:]
+                images = images.view(*orig_prefix_shape, *new_img_shape)
 
         return state, action, images

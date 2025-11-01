@@ -9,9 +9,6 @@ import torch
 sys.path.append(
     os.path.join(os.path.dirname(__file__), "../../../third_party/diffusion_policy")
 )
-from diffusion_policy.policy.diffusion_unet_hybrid_image_policy import (
-    DiffusionUnetHybridImagePolicy,
-)
 from robo_manip_baselines.common import (
     DataKey,
     RolloutBase,
@@ -23,13 +20,15 @@ from robo_manip_baselines.common import (
 class RolloutDiffusionPolicy(RolloutBase):
     def setup_policy(self):
         # For backward compatibility
+        if "backbone" not in self.model_meta_info["policy"]:
+            self.model_meta_info["policy"]["backbone"] = "cnn"
         if "scheduler" not in self.model_meta_info["policy"]:
             self.model_meta_info["policy"]["scheduler"] = "ddpm"
 
         # Print policy information
         self.print_policy_info()
         print(
-            f"  - use ema: {self.model_meta_info['policy']['use_ema']}, scheduler: {self.model_meta_info['policy']['scheduler']}"
+            f"  - use ema: {self.model_meta_info['policy']['use_ema']}, backbone: {self.model_meta_info['policy']['backbone']}, scheduler: {self.model_meta_info['policy']['scheduler']}"
         )
         print(
             f"  - horizon: {self.model_meta_info['data']['horizon']}, obs steps: {self.model_meta_info['data']['n_obs_steps']}, action steps: {self.model_meta_info['data']['n_action_steps']}"
@@ -38,7 +37,7 @@ class RolloutDiffusionPolicy(RolloutBase):
             f"  - image size: {self.model_meta_info['data']['image_size']}, image crop size: {self.model_meta_info['data']['image_crop_size']}"
         )
 
-        # Construct policy
+        # Construct scheduler
         if self.model_meta_info["policy"]["scheduler"] == "ddpm":
             from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
 
@@ -55,7 +54,25 @@ class RolloutDiffusionPolicy(RolloutBase):
             raise ValueError(
                 f"[{self.__class__.__name__}] Invalid scheduler: {self.model_meta_info['policy']['scheduler']}"
             )
-        self.policy = DiffusionUnetHybridImagePolicy(
+
+        # Construct policy
+        if self.model_meta_info["policy"]["backbone"] == "cnn":
+            from diffusion_policy.policy.diffusion_unet_hybrid_image_policy import (
+                DiffusionUnetHybridImagePolicy,
+            )
+
+            PolicyClass = DiffusionUnetHybridImagePolicy
+        elif self.model_meta_info["policy"]["backbone"] == "transformer":
+            from diffusion_policy.policy.diffusion_transformer_hybrid_image_policy import (
+                DiffusionTransformerHybridImagePolicy,
+            )
+
+            PolicyClass = DiffusionTransformerHybridImagePolicy
+        else:
+            raise ValueError(
+                f"[{self.__class__.__name__}] Invalid backbone: {self.model_meta_info['policy']['backbone']}"
+            )
+        self.policy = PolicyClass(
             noise_scheduler=noise_scheduler,
             **self.model_meta_info["policy"]["args"],
         )
@@ -82,6 +99,11 @@ class RolloutDiffusionPolicy(RolloutBase):
         self.policy_action_buf = None
 
     def infer_policy(self):
+        # Update observation buffer
+        if len(self.state_keys) > 0:
+            self.update_state_buf()
+        self.update_images_buf()
+
         # Infer
         if self.policy_action_buf is None or len(self.policy_action_buf) == 0:
             input_data = {}
@@ -102,8 +124,7 @@ class RolloutDiffusionPolicy(RolloutBase):
             [self.policy_action_list, self.policy_action[np.newaxis]]
         )
 
-    def get_state(self):
-        # Get latest value
+    def update_state_buf(self):
         state = np.concatenate(
             [
                 self.motion_manager.get_data(state_key, self.obs)
@@ -113,7 +134,6 @@ class RolloutDiffusionPolicy(RolloutBase):
         state = normalize_data(state, self.model_meta_info["state"])
         state = torch.tensor(state, dtype=torch.float32)
 
-        # Store and return
         if self.state_buf is None:
             self.state_buf = [
                 state for _ in range(self.model_meta_info["data"]["n_obs_steps"])
@@ -122,12 +142,10 @@ class RolloutDiffusionPolicy(RolloutBase):
             self.state_buf.pop(0)
             self.state_buf.append(state)
 
-        state = torch.stack(self.state_buf, dim=0)[torch.newaxis].to(self.device)
+    def get_state(self):
+        return torch.stack(self.state_buf, dim=0)[torch.newaxis].to(self.device)
 
-        return state
-
-    def get_images(self):
-        # Get latest value
+    def update_images_buf(self):
         images = []
         for camera_name in self.camera_names:
             image = self.info["rgb_images"][camera_name]
@@ -142,7 +160,6 @@ class RolloutDiffusionPolicy(RolloutBase):
 
             images.append(image)
 
-        # Store and return
         if self.images_buf is None:
             self.images_buf = [
                 [image for _ in range(self.model_meta_info["data"]["n_obs_steps"])]
@@ -153,12 +170,11 @@ class RolloutDiffusionPolicy(RolloutBase):
                 single_images_buf.pop(0)
                 single_images_buf.append(image)
 
-        images = [
+    def get_images(self):
+        return [
             torch.stack(single_images_buf, dim=0)[torch.newaxis].to(self.device)
             for single_images_buf in self.images_buf
         ]
-
-        return images
 
     def draw_plot(self):
         # Clear plot

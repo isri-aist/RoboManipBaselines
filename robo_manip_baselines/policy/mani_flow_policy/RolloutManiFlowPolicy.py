@@ -5,16 +5,16 @@ import cv2
 import matplotlib.pylab as plt
 import numpy as np
 import torch
-from diffusers.schedulers.scheduling_ddim import DDIMScheduler
 
 sys.path.append(
     os.path.join(
         os.path.dirname(__file__),
-        "../../../third_party/3D-Diffusion-Policy/3D-Diffusion-Policy",
+        "../../../third_party/ManiFlow_Policy/ManiFlow",
     )
 )
-from diffusion_policy_3d.policy.dp3 import DP3
+
 from robo_manip_baselines.common import (
+    DataKey,
     RolloutBase,
     convert_depth_image_to_pointcloud,
     denormalize_data,
@@ -28,7 +28,7 @@ from robo_manip_baselines.common.utils.Vision3dUtils import (
 )
 
 
-class RolloutDiffusionPolicy3d(RolloutBase):
+class RolloutManiFlowPolicy(RolloutBase):
     def set_additional_args(self, parser):
         parser.add_argument(
             "--plot_colored_pointcloud",
@@ -37,23 +37,37 @@ class RolloutDiffusionPolicy3d(RolloutBase):
         )
 
     def setup_policy(self):
+        self.policy_type = self.model_meta_info["policy"]["policy_type"]
+
         # Print policy information
         self.print_policy_info()
+        print(f"  - policy type: {self.model_meta_info['policy']['policy_type']}")
         print(f"  - use ema: {self.model_meta_info['policy']['use_ema']}")
         print(
             f"  - horizon: {self.model_meta_info['data']['horizon']}, obs steps: {self.model_meta_info['data']['n_obs_steps']}, action steps: {self.model_meta_info['data']['n_action_steps']}"
         )
         data_info = self.model_meta_info["data"]
-        print(
-            f"  - with color: {data_info['use_pc_color']}, num points: {data_info['num_points']}, image size: {data_info['image_size']}, min bound: {data_info['min_bound']}, max bound: {data_info['max_bound']}, rpy_angle: {data_info['rpy_angle']}"
-        )
+        if self.policy_type == "image":
+            print(f"  - image size: {data_info['image_size']}")
+        else:  # if self.policy_type == "pointcloud":
+            print(
+                f"  - with color: {data_info['use_pc_color']}, num points: {data_info['num_points']}, image size: {data_info['image_size']}, min bound: {data_info['min_bound']}, max bound: {data_info['max_bound']}, rpy_angle: {data_info['rpy_angle']}"
+            )
 
         # Construct policy
-        noise_scheduler = DDIMScheduler(
-            **self.model_meta_info["policy"]["noise_scheduler_args"]
-        )
-        self.policy = DP3(
-            noise_scheduler=noise_scheduler,
+        if self.policy_type == "image":
+            from maniflow.policy.maniflow_image_policy import (
+                ManiFlowTransformerImagePolicy,
+            )
+
+            PolicyClass = ManiFlowTransformerImagePolicy
+        else:  # if self.policy_type == "pointcloud":
+            from maniflow.policy.maniflow_pointcloud_policy import (
+                ManiFlowTransformerPointcloudPolicy,
+            )
+
+            PolicyClass = ManiFlowTransformerPointcloudPolicy
+        self.policy = PolicyClass(
             **self.model_meta_info["policy"]["args"],
         )
 
@@ -76,24 +90,34 @@ class RolloutDiffusionPolicy3d(RolloutBase):
         super().reset_variables()
 
         self.state_buf = None
-        self.pointcloud_buf = None
         self.policy_action_buf = None
 
-        self.pointcloud_plot = None
-        self.pointcloud_scatter = None
+        if self.policy_type == "image":
+            self.images_buf = None
+        else:  # if self.policy_type == "pointcloud":
+            self.pointcloud_buf = None
+            self.pointcloud_plot = None
+            self.pointcloud_scatter = None
 
     def infer_policy(self):
         # Update observation buffer
         if len(self.state_keys) > 0:
             self.update_state_buf()
-        self.update_pointcloud_buf()
+        if self.policy_type == "image":
+            self.update_images_buf()
+        else:  # if self.policy_type == "pointcloud":
+            self.update_pointcloud_buf()
 
         # Infer
         if self.policy_action_buf is None or len(self.policy_action_buf) == 0:
             input_data = {}
             if len(self.state_keys) > 0:
                 input_data["state"] = self.get_state()
-            input_data["point_cloud"] = self.get_pointcloud()
+            if self.policy_type == "image":
+                for camera_name, image in zip(self.camera_names, self.get_images()):
+                    input_data[DataKey.get_rgb_image_key(camera_name)] = image
+            else:  # if self.policy_type == "pointcloud":
+                input_data["point_cloud"] = self.get_pointcloud()
             action = self.policy.predict_action(input_data)["action"][0]
             self.policy_action_buf = list(
                 action.cpu().detach().numpy().astype(np.float64)
@@ -127,6 +151,37 @@ class RolloutDiffusionPolicy3d(RolloutBase):
 
     def get_state(self):
         return torch.stack(self.state_buf, dim=0)[torch.newaxis].to(self.device)
+
+    def update_images_buf(self):
+        images = []
+        for camera_name in self.camera_names:
+            image = self.info["rgb_images"][camera_name]
+
+            image = cv2.resize(image, self.model_meta_info["data"]["image_size"])
+
+            image = np.moveaxis(image, -1, -3)
+            image = torch.tensor(image, dtype=torch.uint8)
+            image = self.image_transforms(image)
+            # Adjust to a range from -1 to 1 to match the original implementation
+            image = image * 2.0 - 1.0
+
+            images.append(image)
+
+        if self.images_buf is None:
+            self.images_buf = [
+                [image for _ in range(self.model_meta_info["data"]["n_obs_steps"])]
+                for image in images
+            ]
+        else:
+            for single_images_buf, image in zip(self.images_buf, images):
+                single_images_buf.pop(0)
+                single_images_buf.append(image)
+
+    def get_images(self):
+        return [
+            torch.stack(single_images_buf, dim=0)[torch.newaxis].to(self.device)
+            for single_images_buf in self.images_buf
+        ]
 
     def update_pointcloud_buf(self):
         # Get latest value
@@ -212,8 +267,10 @@ class RolloutDiffusionPolicy3d(RolloutBase):
             _ax.cla()
             _ax.axis("off")
 
-        # Plot pointclouds
-        self.ax[0, 0] = self.plot_pointcloud(self.ax[0, 0])
+        if self.policy_type == "image":
+            self.plot_images(self.ax[0, 0 : len(self.camera_names)])
+        else:  # if self.policy_type == "pointcloud":
+            self.ax[0, 0] = self.plot_pointcloud(self.ax[0, 0])
 
         # Plot action
         self.plot_action(self.ax[1, 0])

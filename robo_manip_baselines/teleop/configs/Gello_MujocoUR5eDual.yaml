@@ -1,0 +1,14 @@
+0:
+  port: /dev/serial/by-id/usb-FTDI_USB__-__Serial_Converter_FT9MIQNO-if00-port0
+  config:
+    joint_ids: [1, 2, 3, 4, 5, 6]
+    joint_offsets: [0.0, 4.71238898038469, 3.141592653589793, 4.71238898038469, 3.141592653589793, 0.0]
+    joint_signs: [1, 1, -1, 1, 1, 1]
+    gripper_config: [7, 199.31171875, 157.51171875]
+1:
+  port: /dev/serial/by-id/usb-FTDI_USB__-__Serial_Converter_FT9MG5IM-if00-port0
+  config:
+    joint_ids: [1, 2, 3, 4, 5, 6]
+    joint_offsets: [1.5707963267948966, 4.71238898038469, 3.141592653589793, 4.71238898038469, 3.141592653589793, 7.853981633974483]
+    joint_signs: [1, 1, -1, 1, 1, 1]
+    gripper_config: [7, 202.036328125, 160.236328125]

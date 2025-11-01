@@ -220,6 +220,11 @@ class MujocoEnvBase(EnvDataMixin, MujocoEnv, ABC):
         return list(self.cameras.keys())
 
     @property
+    def pointcloud_camera_names(self):
+        """Get pointcloud camera names."""
+        return []
+
+    @property
     def rgb_tactile_names(self):
         """Get names of tactile sensors with RGB output."""
         return []

@@ -45,11 +45,13 @@ Follow our step-by-step [Installation Guide](./doc/install.md) to get set up smo
 We provide several powerful policy architectures for manipulation tasks:
 
 - 🔹 **[MLP](./robo_manip_baselines/policy/mlp)**: Simple feedforward policy
-- 🔹 **[SARNN](./robo_manip_baselines/policy/sarnn)**: Sequence-aware RNN-based policy
-- 🔹 **[ACT](./robo_manip_baselines/policy/act)**: Transformer-based imitation policy
+- 🔹 **[SARNN](./robo_manip_baselines/policy/sarnn)**: Recurrent policy for sequential data
+- 🔹 **[ACT](./robo_manip_baselines/policy/act)**: Transformer-based action chunking policy
 - 🔹 **[MT-ACT](./robo_manip_baselines/policy/mt_act)**: Multi-task Transformer-based imitation policy
-- 🔹 **[Diffusion Policy](./robo_manip_baselines/policy/diffusion_policy)**: Diffusion-based behavior cloning policy
-- 🔹 **[3D DiffusionPolicy](./robo_manip_baselines/policy/diffusion_policy_3d)**: Diffusion-based policy using 3D point cloud observations
+- 🔹 **[Diffusion Policy](./robo_manip_baselines/policy/diffusion_policy)**: Diffusion-based imitation policy
+- 🔹 **[3D Diffusion Policy](./robo_manip_baselines/policy/diffusion_policy_3d)**: Diffusion-based policy with 3D point cloud input
+- 🔹 **[Flow Policy](./robo_manip_baselines/policy/flow_policy)**: Flow-matching-based policy with 3D point cloud input
+- 🔹 **[ManiFlow Policy](./robo_manip_baselines/policy/mani_flow_policy)**: Flow-matching and consistency-based policy with 2D/3D vision
 
 ---
 
@@ -58,6 +60,7 @@ We provide several powerful policy architectures for manipulation tasks:
 - 📂 [Dataset List](./doc/dataset_list.md): Pre-collected expert demonstration datasets
 - 🧠 [Learned Parameters](./doc/learned_parameters.md): Trained model checkpoints and configs
 - 📄 [Data Format](./doc/rmb_data_format.md): Description of the custom RMB data format used in RoboManipBaselines
+- 🪄 [Point Cloud Preprocessing](./doc/preprocessing_pointcloud.md): Data preprocessing for 3D point cloud policies
 
 ---
 
@@ -112,13 +115,11 @@ Please check individual files or directories (especially `third_party` and `asse
 If you use RoboManipBaselines in your work, please cite us:
 
 ```bibtex
-@software{RoboManipBaselines_GitHub2024,
-  author = {Murooka, Masaki and Motoda, Tomohiro and Nakajo, Ryoichi},
-  title = {{RoboManipBaselines}},
-  url = {https://github.com/isri-aist/RoboManipBaselines},
-  version = {1.0.0},
-  year = {2024},
-  month = dec,
+@article{RoboManipBaselines_Murooka_2025,
+  title={RoboManipBaselines: A Unified Framework for Imitation Learning in Robotic Manipulation across Real and Simulated Environments},
+  author={Murooka, Masaki and Motoda, Tomohiro and Nakajo, Ryoichi and Oh, Hanbit and Makihara, Koshi and Shirai, Keisuke and Domae, Yukiyasu},
+  journal={arXiv preprint arXiv:2509.17057},
+  year={2025}
 }
 ```
 

@@ -18,6 +18,9 @@ from .body.BodyManagerBase import BodyConfigBase, BodyManagerBase
 from .body.ArmManager import ArmConfig, ArmManager
 from .body.MobileOmniManager import MobileOmniConfig, MobileOmniManager
 
+from .mixin.DpStyleDatasetMixin import DpStyleDatasetMixin
+from .mixin.TrainPointCloudMixin import TrainPointCloudMixin
+
 from .utils.MathUtils import (
     set_random_seed,
     get_pose_from_rot_pos,

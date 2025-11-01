@@ -41,6 +41,11 @@ def parse_argument():
         help="List of rgb image size (width, height) to be cropped before resize. Specify a 2-dimensional array if all images have the same size, or an array of <number-of-images> * 2 dimensions if the size differs for each individual image.",
     )
     parser.add_argument(
+        "--use_pointcloud_camera",
+        action="store_true",
+        help="Whether to use the cameras specified by 'pointcloud_camera_names' instead of 'camera_names'",
+    )
+    parser.add_argument(
         "--display_stored_pointcloud",
         action="store_true",
         help="Whether to visualize the point cloud stored in the log file instead of generating it from depth image",
@@ -56,9 +61,14 @@ class VisualizeData:
         output_mp4_filename,
         mp4_codec,
         rgb_crop_size_list,
+        use_pointcloud_camera,
         display_stored_pointcloud,
     ):
-        self.display_stored_pointcloud = display_stored_pointcloud
+        self.use_pointcloud_camera = use_pointcloud_camera
+        if self.use_pointcloud_camera:
+            self.display_stored_pointcloud = True
+        else:
+            self.display_stored_pointcloud = display_stored_pointcloud
 
         self.setup_data(rmb_filename, skip, rgb_crop_size_list)
 
@@ -75,7 +85,13 @@ class VisualizeData:
         print(f"[{self.__class__.__name__}] Load {rmb_filename}")
         self.data_manager.load_data(rmb_filename)
 
-        camera_names = self.data_manager.get_meta_data("camera_names").tolist()
+        if self.use_pointcloud_camera:
+            camera_names = self.data_manager.get_meta_data(
+                "pointcloud_camera_names"
+            ).tolist()
+        else:
+            camera_names = self.data_manager.get_meta_data("camera_names").tolist()
+
         try:
             rgb_tactile_names = self.data_manager.get_meta_data(
                 "rgb_tactile_names"

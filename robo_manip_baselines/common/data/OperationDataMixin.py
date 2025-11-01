@@ -58,6 +58,15 @@ class OperationDataMixin:
                 DataKey.get_rgb_image_key(rgb_tactile_name),
                 self.info["rgb_images"][rgb_tactile_name],
             )
+        for pointcloud_camera_name in self.env.unwrapped.pointcloud_camera_names:
+            self.data_manager.append_single_data(
+                DataKey.get_rgb_image_key(pointcloud_camera_name),
+                self.info["rgb_images"][pointcloud_camera_name],
+            )
+            self.data_manager.append_single_data(
+                DataKey.get_depth_image_key(pointcloud_camera_name),
+                self.info["depth_images"][pointcloud_camera_name],
+            )
 
         # Add tactile
         if "intensity_tactile" in self.info:
@@ -65,4 +74,12 @@ class OperationDataMixin:
                 self.data_manager.append_single_data(
                     intensity_tactile_name,
                     self.info["intensity_tactile"][intensity_tactile_name].copy(),
+                )
+
+        # Add pointcloud
+        if "pointclouds" in self.info:
+            for pointcloud_camera_name in self.info["pointclouds"]:
+                self.data_manager.append_single_data(
+                    DataKey.get_pointcloud_key(pointcloud_camera_name) + "_raw",
+                    self.info["pointclouds"][pointcloud_camera_name].copy(),
                 )

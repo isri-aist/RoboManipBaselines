@@ -21,12 +21,24 @@
 [submodule "third_party/YCB_sim"]
 	path = third_party/YCB_sim
 	url = https://github.com/mmurooka/YCB_sim.git
+        ignore = untracked
 [submodule "third_party/3D-Diffusion-Policy"]
 	path = third_party/3D-Diffusion-Policy
 	url = https://github.com/Naoki-Shibayama/3D-Diffusion-Policy.git
+        ignore = untracked
 [submodule "third_party/pyorbbecsdk"]
 	path = third_party/pyorbbecsdk
 	url = https://github.com/orbbec/pyorbbecsdk.git
+
 [submodule "external/check_AprilTag"]
 	path = external/check_AprilTag
 	url = https://github.com/kotaro-kaji/check_AprilTag.git
+        ignore = untracked
+[submodule "third_party/FlowPolicy"]
+	path = third_party/FlowPolicy
+	url = https://github.com/mmurooka/FlowPolicy.git
+        ignore = untracked
+[submodule "third_party/ManiFlow_Policy"]
+	path = third_party/ManiFlow_Policy
+	url = https://github.com/Naoki-Shibayama/ManiFlow_Policy.git
+        ignore = untracked

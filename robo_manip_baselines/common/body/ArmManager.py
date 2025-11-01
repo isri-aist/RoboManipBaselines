@@ -123,7 +123,7 @@ class ArmManager(BodyManagerBase):
             eef_pose_rel = command[
                 6 * self.body_config.eef_idx : 6 * (self.body_config.eef_idx + 1)
             ]
-            self.set_command_eef_pose_rel(eef_pose_rel)
+            self.set_command_eef_pose_rel(eef_pose_rel, is_skip)
         else:
             raise ValueError(
                 f"[{self.__class__.__name__}] Invalid command data key: {key}"

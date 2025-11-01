@@ -79,13 +79,35 @@ diffusion-policy-3d = [
   "diffusers==0.11.1",
   "open3d",
 ]
+flow-policy = [
+  "zarr==2.12.0",
+  "omegaconf",
+  "hydra-core==1.2.0",
+  "dill==0.3.5.1",
+  "einops==0.4.1",
+  "diffusers==0.11.1",
+  "open3d",
+]
+maniflow-policy = [
+  "zarr==2.12.0",
+  "omegaconf",
+  "hydra-core==1.2.0",
+  "dill==0.3.5.1",
+  "einops==0.4.1",
+  "diffusers==0.11.1",
+  "open3d",
+  "timm",
+  "huggingface_hub<=0.25.0"
+]
 real-ur5e = [
   "ur_rtde",
   "pyrealsense2",
+  "hid",
 ]
 real-xarm7 = [
   "xArm-Python-SDK",
   "pyrealsense2",
+  "hid",
 ]
 benchmarks = [
   "ruamel.yaml",
