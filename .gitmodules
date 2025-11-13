@@ -38,3 +38,8 @@
 	path = third_party/ManiFlow_Policy
 	url = https://github.com/Naoki-Shibayama/ManiFlow_Policy.git
         ignore = untracked
+[submodule "third_party/lerobot"]
+	path = third_party/lerobot
+	url = https://github.com/huggingface/lerobot.git
+	ignore = untracked
+	ignore = untracked
