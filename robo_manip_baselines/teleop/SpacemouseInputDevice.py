@@ -73,3 +73,17 @@ class SpacemouseInputDevice(InputDeviceBase):
             gripper_joint_pos -= self.gripper_scale
 
         self.arm_manager.set_command_gripper_joint_pos(gripper_joint_pos)
+
+    def is_active(self) -> bool:
+        if self.state is None:
+            return False
+        # Check for any movement, rotation, or button press
+        return (
+            abs(self.state.x) > 1e-6
+            or abs(self.state.y) > 1e-6
+            or abs(self.state.z) > 1e-6
+            or abs(self.state.roll) > 1e-6
+            or abs(self.state.pitch) > 1e-6
+            or abs(self.state.yaw) > 1e-6
+            or any(self.state.buttons)
+        )

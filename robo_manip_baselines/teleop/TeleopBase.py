@@ -305,7 +305,7 @@ class TeleopBase(OperationDataMixin, ABC):
             "--input_device",
             type=str,
             default="spacemouse",
-            choices=["spacemouse", "gello", "keyboard"],
+            choices=["spacemouse", "gello", "keyboard", "keyboard_azerty"],
             help="input device for teleoperation",
         )
         parser.add_argument(
@@ -685,9 +685,6 @@ class TeleopBase(OperationDataMixin, ABC):
         print(f"[{self.__class__.__name__}] Statistics on teleoperation")
         if len(self.iteration_duration_list) > 0:
             iteration_duration_arr = np.array(self.iteration_duration_list)
-            print(
-                f"  - Real-time factor | {self.env.unwrapped.dt / iteration_duration_arr.mean():.2f}"
-            )
             print(
                 "  - Iteration duration [s] | "
                 f"mean: {iteration_duration_arr.mean():.3f}, std: {iteration_duration_arr.std():.3f} "
