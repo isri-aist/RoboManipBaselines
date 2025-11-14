@@ -1,0 +1,56 @@
+# General dataset metadata
+robot_type: "xarm7"
+fps: 30
+
+# Define the names for motors and cameras. The order should match the data arrays.
+# Based on MujocoXarm7EnvBase _get_obs: 7 arm joints + 1 gripper joint = 8
+motor_names:
+  - "joint1"
+  - "joint2"
+  - "joint3"
+  - "joint4"
+  - "joint5"
+  - "joint6"
+  - "joint7"
+  - "gripper"
+
+# Use simple names that match the --camera_names argument in your training script.
+# Kept defaults as this is not defined in the env code.
+camera_names:
+  - "front"
+  - "side"
+  - "hand"
+
+# Camera resolution [height, width]
+camera_resolution: [480, 640]
+
+# If this key is present, all images will be resized to this resolution.
+target_camera_resolution: [64, 64]
+
+# Key in HDF5 file attributes to find the text task description.
+task_description_key: "task_desc"
+
+# Configuration for reward labeling during data conversion.
+# This matches the MujocoXarm7PushtEnv _get_reward logic (returns 1.0 on success).
+reward_labeling:
+  # If true, the episode is considered a success and the last N frames are labeled with reward 1.
+  # If false, all frames are labeled with reward 0.
+  positive_demonstration: true
+  # Number of final frames in a successful trajectory to label with a reward of 1.
+  steps_before_success: 5
+
+# Specifies where image data is stored.
+image_storage: "external_mp4"
+
+# Mapping from LeRobot keys to the keys inside your raw HDF5 files.
+# Adapted to match the observation keys from MujocoXarm7EnvBase _get_obs
+data_mapping:
+  state: ['measured_eef_pose', 'measured_gripper_joint_pos']
+  action: ['command_eef_pose_rel', 'command_gripper_joint_pos']
+
+  # Optional keys from observation dict
+  # velocity: "joint_vel"
+  # effort: "wrench"
+
+  # Filename template for external videos.
+  image_template: "{camera_name}_rgb_image.rmb.mp4"

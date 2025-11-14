@@ -1,0 +1,91 @@
+# robomanipbaseline/envs/configs/lerobot_xarm7_acfql.yaml
+
+# Path to the offline demonstration dataset, which must be pre-converted
+# to the LeRobotDataset format.
+dataset:
+  repo_id: "local"
+  # Updated to point to the xarm7 dataset directory
+  root: "/home/dev/dataset_baseline/lerobot/MujocoXarm7Pusht_Dataset100_20250922/"
+
+# Environment configuration.
+env:
+  # Updated to match your environment
+  type: "MujocoXarm7Pusht"
+  # Updated to match the task from MujocoXarm7PushtEnv.py
+  task: "Push the T-block to the target region."
+  max_episode_steps: 300
+
+# Policy configuration.
+# Based on Flow Q-learning agent with action chunking (ACFQL).
+policy:
+  type: "acfql"
+  device: cuda
+  storage_device: cuda
+
+  # -- Distributed Actor-Learner Communication ------------------------
+  actor_learner_config:
+    learner_host: "127.0.0.1"
+    learner_port: 50051
+    policy_parameters_push_frequency: 2
+    queue_get_timeout: 2.0
+
+  concurrency:
+    actor: "threads"
+    learner: "threads"
+
+  # -- Encoder & Architecture parameters ------------------------------
+  vision_encoder_name: "helper2424/resnet10"
+  freeze_vision_encoder: true
+  shared_encoder: true
+  image_embedding_pooling_dim: 8
+  state_encoder_hidden_dim: 256
+  latent_dim: 256
+
+  # -- Training & Buffer parameters -----------------------------------
+  online_steps: 1000000
+  offline_steps: 1000
+  online_step_before_learning: 100
+  online_buffer_capacity: 100000
+  offline_buffer_capacity: 100000
+  async_prefetch: false
+  policy_update_freq: 1
+  utd_ratio: 2
+
+  # -- ACFQL Algorithm parameters -------------------------------------
+  chunk_size: 100
+  n_action_steps: 100
+  discount: 0.99
+  num_critics: 2
+  critic_lr: 3e-4
+  actor_lr: 3e-4
+  critic_target_update_weight: 0.005
+  q_agg: "mean"
+  alpha: 10.0
+  flow_steps: 10
+  normalize_q_loss: false
+  use_td_loss: true
+  grad_clip_norm: 40.0
+
+  # -- Network Configurations (using defaults) -----------------------
+  critic_network_kwargs:
+    hidden_dims: [256,256]
+    activate_final: true
+    layer_norm: true
+  actor_network_kwargs:
+    hidden_dims: [256,256]
+    activate_final: true
+    layer_norm: false
+  use_torch_compile: true
+
+# General training parameters
+# Updated job name for xarm7
+job_name: "robomanipbaseline_xarm7_acfql"
+seed: 42
+batch_size: 256
+save_checkpoint: true
+save_freq: 50000
+log_freq: 100
+wandb:
+  enable: false
+  # Updated project name for xarm7
+  project: "robomanipbaseline_xarm7_acfql"

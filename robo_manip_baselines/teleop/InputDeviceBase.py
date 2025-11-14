@@ -25,3 +25,12 @@ class InputDeviceBase(ABC):
     @abstractmethod
     def set_command_data(self):
         pass
+
+    def is_active(self) -> bool:
+        """
+        Check if the device is currently receiving active input from the user.
+        Returns `True` if active, `False` otherwise.
+        """
+        # Default implementation can return True, but it's better to be explicit
+        # in subclasses.
+        return True

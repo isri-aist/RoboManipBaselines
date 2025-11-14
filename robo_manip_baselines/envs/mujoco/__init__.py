@@ -22,3 +22,6 @@ from .aloha.MujocoAlohaHandoverEnv import MujocoAlohaHandoverEnv
 from .hsr.MujocoHsrTidyupEnv import MujocoHsrTidyupEnv
 
 from .g1.MujocoG1BottlesEnv import MujocoG1BottlesEnv
+
+from .ur10e.MujocoUR10eCableEnv import MujocoUR10eCableEnv
+from .ur5e.MujocoUR5eSimplePickEnv import MujocoUR5eSimplePickEnv
