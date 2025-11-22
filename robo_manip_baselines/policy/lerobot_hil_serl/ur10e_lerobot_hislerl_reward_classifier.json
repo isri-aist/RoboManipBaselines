@@ -1,0 +1,32 @@
+{
+  "policy": {
+    "type": "reward_classifier",
+    "model_name": "google/vit-base-patch16-224-in21k",
+    "model_type": "transformer",
+    "num_cameras": 4,
+    "num_classes": 2,
+    "hidden_dim": 256,
+    "dropout_rate": 0.1,
+    "learning_rate": 1e-4,
+    "device": "cuda",
+    "use_amp": true,
+    "input_features": {
+      "observation.images.oak": {
+        "type": "VISUAL",
+        "shape": [3, 224, 224]
+      },
+      "observation.images.zed": {
+        "type": "VISUAL",
+        "shape": [3, 224, 224]
+      },
+    "observation.images.zed2i": {
+        "type": "VISUAL",
+        "shape": [3, 224, 224]
+      },
+      "observation.images.mini": {
+        "type": "VISUAL",
+        "shape": [3, 224, 224]
+      }
+    }
+  }
+}

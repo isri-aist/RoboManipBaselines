@@ -14,6 +14,8 @@ class TrainMain:
         "DiffusionPolicy3d",
         "FlowPolicy",
         "ManiFlowPolicy",
+        "LerobotHilSerl",
+        "LerobotAcfql"
     ]
 
     def __init__(self):
@@ -54,10 +56,15 @@ class TrainMain:
     def run(self):
         from robo_manip_baselines.common import camel_to_snake
 
-        policy_module = importlib.import_module(
-            f"{self.policy_parent_module_str}.{camel_to_snake(self.args.policy)}"
-        )
-        TrainPolicyClass = getattr(policy_module, f"Train{self.args.policy}")
+        if self.args.policy == "LerobotHilSerlClassifier":
+            from robo_manip_baselines.policy.lerobot_hil_serl.TrainLerobotHilSerlClassifier import TrainLerobotHilSerlRewardClassifier
+            TrainPolicyClass = TrainLerobotHilSerlRewardClassifier
+        else:
+
+            policy_module = importlib.import_module(
+                f"{self.policy_parent_module_str}.{camel_to_snake(self.args.policy)}"
+            )
+            TrainPolicyClass = getattr(policy_module, f"Train{self.args.policy}")
 
         train = TrainPolicyClass()
         train.run()

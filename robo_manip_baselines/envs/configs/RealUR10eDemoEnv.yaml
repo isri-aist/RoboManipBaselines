@@ -1,0 +1,10 @@
+robot_ip: "192.168.56.100"
+camera_ids:
+  zed: "14853"
+  zed2i: "36442055"
+  mini: "11085351"
+  oak: "194430103163F81200"
+  realsense: "031422250264"
+gelsight_ids:
+  tactile_left: "GelSight Mini R0B 2DCD-2N9C: Ge"
+  tactile_right: "GelSight Mini R0B 2DDY-L8TF: Ge"

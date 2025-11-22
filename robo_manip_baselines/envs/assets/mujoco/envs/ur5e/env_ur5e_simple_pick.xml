@@ -1,0 +1,49 @@
+<mujoco model="ur5e_box_pick">
+  <include file="./env_ur5e_common.xml"/>
+
+  <size memory="1G"/>
+
+  <asset>
+    <texture name="box_tex" type="cube" file="general/rubber2.png"/>
+    <material name="box_mat" texture="box_tex" rgba="1.0 1.0 0.5 1.0" specular="0.5" shininess="1.0"/>
+  </asset>
+
+  <default>
+    </default>
+
+  <include file="../../robots/ur5e/ur5e_integrated_shared_config.xml"/>
+  <include file="../../robots/ur5e/ur5e_integrated_specific_config.xml"/>
+
+  <worldbody>
+
+    <light pos="0 0 1.5" dir="0 0 -1" directional="true" diffuse="0.3 0.3 0.3"/>
+
+    <camera name="front" mode="fixed" pos="0.5 0.0 1.5" euler="0.0 0.785398 1.5708"/>
+    <camera name="side" mode="fixed" pos="-0.1 -0.75 0.9" euler="1.5708 0.0 0.0"/>
+
+    <body name="table">
+      <geom type="box" size="0.275 0.5 0.4" pos="0 0 0.4" material="table_base"/>
+      <geom type="box" size="0.275 0.5 0.0075" pos="0 0 0.8075" material="table_plate"/>
+    </body>
+
+    <body name="stand">
+      <geom type="box" size="0.33 0.33 0.4" pos="-0.605 0 0.4" material="stand"/>
+    </body>
+
+    <body name="ur5e_root_frame" pos="-0.605 0.0 0.8">
+      <include file="../../robots/ur5e/ur5e_integrated_body.xml"/>
+    </body>
+
+    <!-- <body name="target_box" pos="-0.05 0.1 0.82" euler="0 0 0.785398">
+      <freejoint name="box_freejoint"/>
+      <geom type="box" size="0.025 0.025 0.025" rgba="1 0.5 0.5 1" material="box_mat"/>
+    </body> -->
+
+    <!-- <body name="target_box" pos="0.0 0.0 0.82" euler="0 0 0"> -->
+    <body name="target_box" pos="-0.1 -0.125 0.82" euler="0 0 0">
+      <freejoint name="box_freejoint"/>
+      <geom type="box" size="0.025 0.025 0.025" rgba="1 0.5 0.5 1" material="box_mat"/>
+    </body>
+
+    </worldbody>
+</mujoco>

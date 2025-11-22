@@ -8,6 +8,7 @@ import pinocchio as pin
 from ..data.DataKey import DataKey
 from ..utils.MathUtils import (
     get_pose_from_se3,
+    get_rel_pose_from_se3,
     get_se3_from_pose,
     get_se3_from_rel_pose,
 )
@@ -47,6 +48,12 @@ class ArmManager(BodyManagerBase):
     def __init__(self, env, body_config):
         super().__init__(env, body_config)
 
+        self.eef_bound_min = None
+        self.eef_bound_max = None
+        self.eef_orientation_target = None
+        self.eef_orientation_max_dev_rad = None
+        self.target_orientation_rot = None
+
         self.pin_model = pin.buildModelFromUrdf(self.body_config.arm_urdf_path)
 
         if self.body_config.exclude_joint_names is not None:
@@ -77,6 +84,7 @@ class ArmManager(BodyManagerBase):
     def reset(self, init=False):
         self.arm_joint_pos = self.body_config.init_arm_joint_pos.copy()
         self.gripper_joint_pos = self.body_config.init_gripper_joint_pos.copy()
+        self.last_eef_pose_rel = np.zeros(6)
 
         self.forward_kinematics()
 
@@ -160,16 +168,53 @@ class ArmManager(BodyManagerBase):
 
     def set_command_eef_pose(self, eef_pose):
         if isinstance(eef_pose, pin.SE3):
-            self.target_se3 = eef_pose
+            new_target_se3 = eef_pose
         else:
-            self.target_se3 = get_se3_from_pose(eef_pose)
+            new_target_se3 = get_se3_from_pose(eef_pose)
+        
+        # 1. Clamp Position
+        if self.eef_bound_min is not None and self.eef_bound_max is not None:
+            clamped_translation = np.clip(
+                new_target_se3.translation,
+                self.eef_bound_min,
+                self.eef_bound_max
+            )
+            new_target_se3.translation = clamped_translation
+
+        # 2. Constrain Orientation
+        if self.target_orientation_rot is not None and self.eef_orientation_max_dev_rad is not None:
+            # Calculate the rotational difference between the command and the target
+            delta_rot = self.target_orientation_rot.T @ new_target_se3.rotation
+            
+            # Use pinocchio's log map to get the angle-axis representation
+            angle_axis_vec = pin.log3(delta_rot)
+            angle_rad = np.linalg.norm(angle_axis_vec)
+
+            # If the deviation is too large, scale it back
+            if angle_rad > self.eef_orientation_max_dev_rad:
+                # Scale the angle-axis vector to the max allowed deviation
+                scaled_angle_axis = angle_axis_vec * (self.eef_orientation_max_dev_rad / angle_rad)
+                # Convert back to a rotation matrix
+                corrected_delta_rot = pin.exp3(scaled_angle_axis)
+                # Apply the corrected rotation to the target orientation
+                new_target_se3.rotation = self.target_orientation_rot @ corrected_delta_rot
+
+        # Calculate the relative transform from the old target to the new one
+        relative_transform_se3 = self.target_se3.inverse() * new_target_se3
+        self.last_eef_pose_rel = get_rel_pose_from_se3(relative_transform_se3)
+
+        self.target_se3 = new_target_se3
         self.inverse_kinematics()
 
     def set_command_eef_pose_rel(self, eef_pose_rel, is_skip=False):
-        target_se3 = self.target_se3.copy()
         if not is_skip:
-            target_se3 = target_se3 * get_se3_from_rel_pose(eef_pose_rel)
-        self.set_command_eef_pose(target_se3)
+            # Convert relative pose to an SE3 object and apply it
+            rel_se3 = get_se3_from_rel_pose(eef_pose_rel)
+            new_target_se3 = self.target_se3 * rel_se3
+            self.set_command_eef_pose(new_target_se3)
+        else:
+            # If skipping, the relative move is zero
+            self.last_eef_pose_rel = np.zeros(6)
 
     def get_eef_pose_from_joint_pos(self, arm_joint_pos):
         pin_data = self.pin_model.createData()
@@ -184,6 +229,8 @@ class ArmManager(BodyManagerBase):
             return self.get_command_gripper_joint_pos()
         elif key == DataKey.COMMAND_EEF_POSE:
             return self.get_command_eef_pose()
+        elif key == DataKey.COMMAND_EEF_POSE_REL:
+            return self.last_eef_pose_rel
         else:
             raise ValueError(
                 f"[{self.__class__.__name__}] Invalid command data key: {key}"
