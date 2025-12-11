@@ -1,0 +1,105 @@
+# robomanipbaseline/envs/configs/lerobot_ur5e_hilserl.yaml
+
+# Path to the offline demonstration dataset, which must be pre-converted
+# to the LeRobotDataset format using the new conversion script.
+dataset:
+  repo_id: "local" # Default: "local". Specifies the dataset is on the local filesystem.
+  root: "/home/dev/dataset_baseline/lerobot/MujocoUR5eSimplePick/" # No default. User-provided path to the dataset.
+
+# Environment configuration.
+env:
+  type: "MujocoUR5eSimplePick" # No default. Name of the custom environment.
+  task: "Pick up the cube."    # No default. Description of the task.
+  max_episode_steps: 400       # No default, environment-specific. Max steps per episode.
+
+# Policy configuration.
+# Based on Soft Actor-Critic (SAC).
+# All defaults are now referenced from the provided SACConfig dataclass.
+policy:
+  repo_id: "local"    # Default: "local".
+  type: "sac"         # No default. The type of reinforcement learning algorithm.
+  device: cuda        # NON-DEFAULT. Default: "cpu". Device for model computation.
+  storage_device: cpu # Default: "cpu". Device for storing data in the replay buffer.
+  n_obs_steps: 1      # Default: 1. Number of consecutive observations to stack.
+
+  normalization_mapping: # The specified values match the defaults.
+    VISUAL: "MEAN_STD"
+    STATE: "MIN_MAX"
+    ENV: "MIN_MAX"
+    ACTION: "MIN_MAX"
+
+  # -- Distributed Actor-Learner Communication ------------------------
+  actor_learner_config:
+    learner_host: "127.0.0.1"
+    learner_port: 50051
+    # Fresher weights lead to better sample efficiency.
+    policy_parameters_push_frequency: 2 # NON-DEFAULT. Default: 4. Frequency (in seconds) for pushing policy updates.
+    queue_get_timeout: 2.0              # Default: 2.0.
+
+  # Concurrency settings for actor and learner. The specified values match the defaults.
+  concurrency:
+    actor: "threads"
+    learner: "threads"
+
+  vision_encoder_name: "helper2424/resnet10" # NON-DEFAULT. Default: null. Must be specified to use vision.
+  freeze_vision_encoder: true               # Default: true.
+  image_encoder_hidden_dim: 32              # Default: 32.
+  shared_encoder: true                      # Default: true.
+  num_discrete_actions: null                # Default: null. Set to an integer for discrete action spaces.
+  image_embedding_pooling_dim: 8            # Default: 8.
+  state_encoder_hidden_dim: 256             # Default: 256.
+  latent_dim: 256                           # Default: 256.
+
+  online_steps: 1000000                 # Default: 1000000.
+  online_step_before_learning: 100      # Default: 100.
+  online_buffer_capacity: 100000        # Default: 100000.
+  offline_buffer_capacity: 100000       # Default: 100000.
+  async_prefetch: false                 # Default: false.
+  policy_update_freq: 1                 # Default: 1.
+  utd_ratio: 1                          # NON-DEFAULT. Default: 1. Update-to-data ratio > 1 enables UTD.
+
+  discount: 0.99                        # NON-DEFAULT. Default: 0.99. Discount factor (gamma).
+  temperature_init: 0.1                 # NON-DEFAULT. Default: 1.0. Initial SAC entropy temperature.
+  num_critics: 2                        # Default: 2.
+  num_subsample_critics: null           # Default: null.
+  critic_lr: 0.0003                      # NON-DEFAULT. Default: 0.0003 (3e-4).
+  actor_lr: 0.0003                      # Default: 0.0003 (3e-4).
+  temperature_lr: 0.0003                # Default: 0.0003 (3e-4).
+  critic_target_update_weight: 0.005    # NON-DEFAULT. Default: 0.005. Soft update factor (tau).
+  target_entropy: null                  # Default: null (auto-calculates as -action_dim).
+  use_backup_entropy: true              # Default: true.
+  grad_clip_norm: 40.0                  # Default: 40.0.
+
+  critic_network_kwargs: # The specified values match the defaults.
+    hidden_dims: [256, 256]
+    activate_final: true
+    final_activation: null
+
+  actor_network_kwargs: # The specified values match the defaults.
+    hidden_dims: [256, 256]
+    activate_final: true
+
+  policy_kwargs:
+    use_tanh_squash: true # Default: true.
+    std_min: 1e-5           # NON-DEFAULT. Default: 1e-5. Minimum log standard deviation.
+    std_max: 10.0         # Default: 10.0. Maximum log standard deviation.
+    init_final: 0.05      # Default: 0.05.
+
+  discrete_critic_network_kwargs: # The specified values match the defaults.
+    hidden_dims: [256, 256]
+    activate_final: true
+    final_activation: null
+
+  use_torch_compile: true # Default: true.
+
+# General training parameters
+job_name: "hilserl_ur5e"    # No default. A name for the training run.
+seed: 42                    # Default: 42 is a common convention, but not from a config class.
+# num_workers: 8              # Default: Typically 0 or 1. Number of parallel data collection workers.
+batch_size: 256              # NON-DEFAULT. Default: Typically 256. Number of samples per gradient update.
+save_checkpoint: true       # Default: Typically true. Whether to save model checkpoints.
+save_freq: 1000000          # Default: Typically ~50,000. Steps between saving checkpoints.
+log_freq: 100               # Default: Typically 100 or 1000. Steps between logging updates.
+wandb:
+  enable: false             # Default: false.
+  project: "robomanipbaseline_hilserl" # No default. W&B project name.

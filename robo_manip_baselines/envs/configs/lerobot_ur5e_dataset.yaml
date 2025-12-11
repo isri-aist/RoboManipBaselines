@@ -1,0 +1,53 @@
+# General dataset metadata
+robot_type: "ur5e"
+fps: 30
+
+# Define the names for motors and cameras. The order should match the data arrays.
+motor_names:
+  - "joint_1"
+  - "joint_2"
+  - "joint_3"
+  - "joint_4"
+  - "joint_5"
+  - "joint_6"
+  - "gripper"
+
+# Use simple names that match the --camera_names argument in your training script.
+camera_names:
+  - "front"
+  - "side"
+  - "hand"
+
+# Camera resolution [height, width]
+camera_resolution: [480, 640]
+
+# If this key is present, all images will be resized to this resolution.
+target_camera_resolution: [64, 64]
+
+# Key in HDF5 file attributes to find the text task description.
+task_description_key: "task_desc"
+
+# Configuration for reward labeling during data conversion.
+reward_labeling:
+  # If true, the episode is considered a success and the last N frames are labeled with reward 1.
+  # If false, all frames are labeled with reward 0.
+  positive_demonstration: true
+  # Number of final frames in a successful trajectory to label with a reward of 1.
+  steps_before_success: 5
+
+# Specifies where image data is stored.
+image_storage: "external_mp4"
+
+# Mapping from LeRobot keys to the keys inside your raw HDF5 files.
+data_mapping:
+  # Required keys
+  state: ['measured_eef_pose', 'measured_gripper_joint_pos']
+  action: ['command_eef_pose_rel', 'command_gripper_joint_pos']
+  # state: ['measured_joint_pos']
+  # action: ['command_joint_pos']
+
+  # velocity: "measured_joint_vel"
+  # effort: "measured_eef_wrench"
+
+  # Filename template for external videos.
+  image_template: "{camera_name}_rgb_image.rmb.mp4"

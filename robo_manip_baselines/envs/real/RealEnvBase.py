@@ -10,6 +10,8 @@ import cv2
 import gymnasium as gym
 import numpy as np
 from gello.cameras.realsense_camera import RealSenseCamera, get_device_ids
+from gello.cameras.zed_camera import ZedCamera, get_zed_device_ids as get_zed_ids
+from gello.cameras.oak_s2_camera import OakCamera, get_oak_device_ids
 
 from robo_manip_baselines.common import ArmConfig, DataKey, EnvDataMixin
 
@@ -30,10 +32,75 @@ class RealEnvBase(EnvDataMixin, gym.Env, ABC):
 
         # Setup device variables
         self.cameras = {}
-        self.pointcloud_cameras = {}
         self.rgb_tactiles = {}
-        self.intensity_tactiles = {}
+        self.pointcloud_cameras = {}
 
+    def setup_oakS2(self, camera_ids):
+        """
+        Initializes and configures OAK-D S2 cameras.
+
+        Args:
+            camera_ids (dict): A dictionary mapping a custom camera name to its MxId string.
+        """
+        detected_camera_ids = get_oak_device_ids()
+        for camera_name, camera_id in camera_ids.items():
+            # Check if the camera_id from the config corresponds to a detected OAK device.
+            # This is necessary because the `camera_ids` dict might contain IDs for
+            # other camera types (e.g., RealSense serials are also strings).
+            if camera_id not in detected_camera_ids:
+                continue
+
+            # Initialize the camera object for the specific device ID.
+            camera = OakCamera(device_id=camera_id)
+
+            # Calculate and store the vertical Field of View (fovy) for downstream compatibility.
+            # In the OakCamera class, depth is aligned to the color camera (CAM_A),
+            # so their FoV and intrinsics are effectively the same for the aligned output.
+            intrinsics = camera.get_intrinsics()["color"]
+            height = intrinsics["resolution"][1]  # Image height
+            fy = intrinsics["fy"]  # Focal length along the y-axis
+
+            # Calculate fovy using the standard formula and convert to degrees.
+            fovy_deg = np.rad2deg(2 * np.arctan(height / (2 * fy)))
+
+            # Store fovy on the camera object.
+            camera.depth_fovy = fovy_deg
+            camera.color_fovy = fovy_deg
+
+            # Add the configured camera to the environment's camera dictionary.
+            self.cameras[camera_name] = camera
+
+    def setup_zed(self, camera_ids):
+        """
+        Initializes and configures ZED cameras.
+
+        Args:
+            camera_ids (dict): A dictionary mapping a custom camera name to its serial number.
+        """
+        detected_camera_ids = get_zed_ids()
+        for camera_name, camera_id in camera_ids.items():
+            try:
+                # ZED IDs are integers; this will fail for non-integer IDs (e.g., RealSense serials).
+                cam_id_int = int(camera_id)
+            except (ValueError, TypeError):
+                # Not a valid ZED ID format, skip it.
+                continue
+
+            if cam_id_int not in detected_camera_ids:
+                # If the ID is not for a detected ZED device, skip it.
+                continue
+
+            camera = ZedCamera(device_id=cam_id_int)
+
+            # Calculate and store fovy for compatibility with downstream tasks
+            intrinsics = camera.get_intrinsics()["left"]  # Use left camera intrinsics
+            height = intrinsics["resolution"][1]
+            fy = intrinsics["fy"]
+            camera.depth_fovy = np.rad2deg(2 * np.arctan(height / (2 * fy)))
+            # The ZedCamera class doesn't have a native color_fovy, we can assign it if needed
+            camera.color_fovy = camera.depth_fovy
+            
+            self.cameras[camera_name] = camera
     def setup_realsense(self, camera_ids):
         if camera_ids is None:
             return
@@ -61,6 +128,40 @@ class RealEnvBase(EnvDataMixin, gym.Env, ABC):
             )
 
             self.cameras[camera_name] = camera
+
+    def setup_gelsight(self, gelsight_ids):
+        if gelsight_ids is None:
+            return
+
+        for rgb_tactile_name, gelsight_id in gelsight_ids.items():
+            for device_name in os.listdir("/sys/class/video4linux"):
+                real_device_name = os.path.realpath(
+                    "/sys/class/video4linux/" + device_name + "/name"
+                )
+                with (
+                    open(real_device_name, "rt") as device_name_file
+                ):  # "rt": read-text mode ("t" is default, so "r" alone is the same)
+                    detected_gelsight_id = device_name_file.read().rstrip()
+                if gelsight_id in detected_gelsight_id:
+                    tactile_num = int(re.search("\d+$", device_name).group(0))
+                    print(
+                        f"[{self.__class__.__name__}] Found GelSight sensor. ID: {detected_gelsight_id}, device: {device_name}, num: {tactile_num}"
+                    )
+
+                    rgb_tactile = cv2.VideoCapture(tactile_num)
+                    if rgb_tactile is None or not rgb_tactile.isOpened():
+                        print(
+                            f"[{self.__class__.__name__}] Unable to open video source of GelSight sensor."
+                        )
+                        continue
+
+                    self.rgb_tactiles[rgb_tactile_name] = rgb_tactile
+                    break
+
+            if rgb_tactile_name not in self.rgb_tactiles:
+                raise RuntimeError(
+                    f"[{self.__class__.__name__}] Specified GelSight (name: {rgb_tactile_name}, ID: {gelsight_id}) not detected."
+                )
 
     def setup_femtobolt(self, pointcloud_camera_ids):
         if pointcloud_camera_ids is None:
@@ -142,66 +243,6 @@ class RealEnvBase(EnvDataMixin, gym.Env, ABC):
         if queue.qsize() >= 5:
             queue.get()
         queue.put(frames)
-
-    def setup_gelsight(self, gelsight_ids):
-        if gelsight_ids is None:
-            return
-
-        for rgb_tactile_name, gelsight_id in gelsight_ids.items():
-            for device_name in os.listdir("/sys/class/video4linux"):
-                real_device_name = os.path.realpath(
-                    "/sys/class/video4linux/" + device_name + "/name"
-                )
-                with (
-                    open(real_device_name, "rt") as device_name_file
-                ):  # "rt": read-text mode ("t" is default, so "r" alone is the same)
-                    detected_gelsight_id = device_name_file.read().rstrip()
-                if gelsight_id in detected_gelsight_id:
-                    tactile_num = int(re.search("\d+$", device_name).group(0))
-                    print(
-                        f"[{self.__class__.__name__}] Found GelSight sensor. ID: {detected_gelsight_id}, device: {device_name}, num: {tactile_num}"
-                    )
-
-                    rgb_tactile = cv2.VideoCapture(tactile_num)
-                    if rgb_tactile is None or not rgb_tactile.isOpened():
-                        print(
-                            f"[{self.__class__.__name__}] Unable to open video source of GelSight sensor."
-                        )
-                        continue
-
-                    self.rgb_tactiles[rgb_tactile_name] = rgb_tactile
-                    break
-
-            if rgb_tactile_name not in self.rgb_tactiles:
-                raise RuntimeError(
-                    f"[{self.__class__.__name__}] Specified GelSight (name: {rgb_tactile_name}, ID: {gelsight_id}) not detected."
-                )
-
-    def setup_sanwa_keyboard(self, sanwa_keyboard_ids):
-        if sanwa_keyboard_ids is None:
-            return
-
-        import hid
-
-        for intensity_tactile_name, device_path in sanwa_keyboard_ids.items():
-            if not os.path.exists(device_path):
-                raise RuntimeError(
-                    f"[{self.__class__.__name__}] Specified keyboard (path: {device_path}) not detected."
-                )
-
-            intensity_tactile_device = hid.Device(path=device_path.encode())
-            if intensity_tactile_device is None:
-                print(
-                    f"[{self.__class__.__name__}] Unable to open keyboard (path: {device_path})."
-                )
-                continue
-            intensity_tactile_buf = np.zeros(shape=(2, 3), dtype=np.uint8)
-            intensity_tactile = {
-                "device": intensity_tactile_device,
-                "buf": intensity_tactile_buf,
-            }
-
-            self.intensity_tactiles[intensity_tactile_name] = intensity_tactile
 
     def get_input_device_kwargs(self, input_device_name):
         return {}
@@ -297,16 +338,16 @@ class RealEnvBase(EnvDataMixin, gym.Env, ABC):
 
         if (
             len(self.camera_names)
-            + len(self.pointcloud_camera_names)
             + len(self.rgb_tactile_names)
-            + len(self.intensity_tactile_names)
+            + len(self.pointcloud_camera_names)
             == 0
         ):
             return info
 
         info["rgb_images"] = {}
         info["depth_images"] = {}
-
+        if len(self.pointcloud_camera_names) > 0:
+            info["pointclouds"] = {}
         with concurrent.futures.ThreadPoolExecutor() as executor:
             futures = {}
 
@@ -314,6 +355,13 @@ class RealEnvBase(EnvDataMixin, gym.Env, ABC):
                 futures[executor.submit(self.get_camera_data, camera_name, camera)] = (
                     camera_name
                 )
+
+            for rgb_tactile_name, rgb_tactile in self.rgb_tactiles.items():
+                futures[
+                    executor.submit(
+                        self.get_rgb_tactile_data, rgb_tactile_name, rgb_tactile
+                    )
+                ] = rgb_tactile_name
 
             for (
                 pointcloud_camera_name,
@@ -327,40 +375,68 @@ class RealEnvBase(EnvDataMixin, gym.Env, ABC):
                     )
                 ] = pointcloud_camera_name
 
-            for rgb_tactile_name, rgb_tactile in self.rgb_tactiles.items():
-                futures[
-                    executor.submit(
-                        self.get_rgb_tactile_data, rgb_tactile_name, rgb_tactile
-                    )
-                ] = rgb_tactile_name
-
-            for (
-                intensity_tactile_name,
-                intensity_tactile,
-            ) in self.intensity_tactiles.items():
-                futures[
-                    executor.submit(
-                        self.get_intensity_tactile_data,
-                        intensity_tactile_name,
-                        intensity_tactile,
-                    )
-                ] = intensity_tactile_name
-
             for future in concurrent.futures.as_completed(futures):
-                name, result = future.result()
-                for key, value in result.items():
-                    if value is None:
-                        continue
-                    if key not in info:
-                        info[key] = {}
-                    info[key][name] = value
+                name, rgb_image, depth_image, pointcloud = future.result()
+                info["rgb_images"][name] = rgb_image
+                info["depth_images"][name] = depth_image
+                if pointcloud is not None:
+                    info["pointclouds"][name] = pointcloud
 
         return info
 
-    def get_camera_data(self, camera_name, camera):
-        rgb_image, depth_image = camera.read((640, 480))
-        depth_image = (1e-3 * depth_image[:, :, 0]).astype(np.float32)  # [m]
-        return camera_name, {"rgb_images": rgb_image, "depth_images": depth_image}
+    def get_camera_data(self, camera_name, camera, img_size=(640, 480), verbose=False):  # Merged
+        """
+        Reads an image from a camera, handling different camera types.
+        """
+
+        if isinstance(camera, RealSenseCamera):
+            rgb_image, depth_image = camera.read(img_size)
+            depth_image = (1e-3 * depth_image[:, :, 0]).astype(np.float32)  # [m]
+
+        elif isinstance(camera, ZedCamera):
+            data = camera.read(img_size=img_size, include_depth=True)
+            if data is None:
+                raise RuntimeError(f"[{self.__class__.__name__}] Failed to read from ZED camera: {camera_name}")
+
+            # The ZedCamera class uses the 'left_image' key for the BGR image.
+            bgr_image = data['left_image']
+            rgb_image = cv2.cvtColor(bgr_image, cv2.COLOR_BGR2RGB)
+
+            # ZED depth is (H, W), uint16 in mm -> convert to float32 in m
+            depth_image = (1e-3 * data['depth_image']).astype(np.float32)
+
+        elif isinstance(camera, OakCamera):
+            data = camera.read(img_size=img_size, include_depth=True)
+            if data is None:
+                raise RuntimeError(f"[{self.__class__.__name__}] Failed to read from OAK camera: {camera_name}")
+
+            # The OakCamera class returns a BGR image in the 'color_image' key.
+            bgr_image = data['color_image']
+            rgb_image = cv2.cvtColor(bgr_image, cv2.COLOR_BGR2RGB)
+
+            # OAK depth is (H, W), uint16 in mm -> convert to float32 in m
+            depth_image_raw = data['depth_image']
+            depth_image = (1e-3 * depth_image_raw).astype(np.float32)
+
+        else:
+            raise TypeError(f"Unsupported camera type: {type(camera)}")
+
+        if verbose:
+            # np.mean can be slow, only use for debugging
+            average_depth = np.mean(depth_image[np.nonzero(depth_image)])
+            print(f"The average depth (z value) for non-zero pixels is: {average_depth:.4f} meters")
+
+        return camera_name, rgb_image, depth_image, None  # Modified return
+
+    def get_rgb_tactile_data(self, rgb_tactile_name, rgb_tactile):
+        ret, rgb_image = rgb_tactile.read()
+        if not ret:
+            raise RuntimeError(
+                f"[{self.__class__.__name__}] Failed to read tactile image."
+            )
+        image_size = (640, 480)
+        rgb_image = cv2.resize(rgb_image, image_size)
+        return rgb_tactile_name, rgb_image, None, None
 
     def get_pointcloud_camera_data(self, pointcloud_camera_name, pointcloud_camera):
         from pyorbbecsdk import OBFormat
@@ -369,7 +445,7 @@ class RealEnvBase(EnvDataMixin, gym.Env, ABC):
 
         rgb_frame = frames.get_color_frame()
         if rgb_frame is None:
-            return pointcloud_camera_name, {}
+            return pointcloud_camera_name, None, None, None
         rgb_width = rgb_frame.get_width()
         rgb_height = rgb_frame.get_height()
         rgb_format = rgb_frame.get_format()
@@ -394,7 +470,7 @@ class RealEnvBase(EnvDataMixin, gym.Env, ABC):
 
         depth_frame = frames.get_depth_frame()
         if depth_frame is None:
-            return pointcloud_camera_name, {"rgb_images": rgb_image}
+            return pointcloud_camera_name, rgb_image, None, None
         depth_scale = depth_frame.get_depth_scale()
         depth_width = depth_frame.get_width()
         depth_height = depth_frame.get_height()
@@ -420,58 +496,7 @@ class RealEnvBase(EnvDataMixin, gym.Env, ABC):
         pointcloud[:, 3:6] = pointcloud[:, 3:6] / 255.0
         pointcloud[:, :3] = pointcloud[:, :3] / 1e3
 
-        return pointcloud_camera_name, {
-            "rgb_images": rgb_image,
-            "depth_images": depth_image,
-            "pointclouds": pointcloud,
-        }
-
-    def get_rgb_tactile_data(self, rgb_tactile_name, rgb_tactile):
-        ret, rgb_image = rgb_tactile.read()
-        if not ret:
-            raise RuntimeError(
-                f"[{self.__class__.__name__}] Failed to read tactile image."
-            )
-        image_size = (640, 480)
-        rgb_image = cv2.resize(rgb_image, image_size)
-        return rgb_tactile_name, {"rgb_images": rgb_image}
-
-    def get_intensity_tactile_data(self, intensity_tactile_name, intensity_tactile):
-        intensity_tactile_device = intensity_tactile["device"]
-        intensity_tactile_buf = intensity_tactile["buf"]
-        key_binaries = intensity_tactile_device.read(9, timeout=3)
-
-        if len(key_binaries) == 0:
-            return intensity_tactile_name, {
-                "intensity_tactile": intensity_tactile_buf.copy()
-            }
-
-        key_name_map = {
-            0x69: "F17",
-            0x6A: "F18",
-            0x6B: "F19",
-            0x6C: "F14",
-            0x6D: "F15",
-            0x6E: "F16",
-        }
-        key_idx_map = {
-            "F14": 0,
-            "F15": 1,
-            "F16": 2,
-            "F17": 3,
-            "F18": 4,
-            "F19": 5,
-        }
-
-        intensity_tactile_value = np.zeros(shape=(2, 3), dtype=np.uint8)
-        for key_binary in key_binaries[3:]:
-            if key_binary in key_name_map:
-                key_name = key_name_map[key_binary]
-                key_idx = key_idx_map[key_name]
-                intensity_tactile_value[int(key_idx // 3)][int(key_idx % 3)] = 1
-
-        intensity_tactile_buf[...] = intensity_tactile_value
-        return intensity_tactile_name, {"intensity_tactile": intensity_tactile_value}
+        return pointcloud_camera_name, rgb_image, depth_image, pointcloud
 
     def get_joint_pos_from_obs(self, obs):
         """Get joint position from observation."""
@@ -512,19 +537,14 @@ class RealEnvBase(EnvDataMixin, gym.Env, ABC):
         return list(self.cameras.keys())
 
     @property
-    def pointcloud_camera_names(self):
-        """Get pointcloud camera names."""
-        return list(self.pointcloud_cameras.keys())
-
-    @property
     def rgb_tactile_names(self):
         """Get names of tactile sensors with RGB output."""
         return list(self.rgb_tactiles.keys())
 
     @property
-    def intensity_tactile_names(self):
-        """Get names of tactile sensors with intensity output."""
-        return list(self.intensity_tactiles.keys())
+    def pointcloud_camera_names(self):
+        """Get pointcloud camera names."""
+        return list(self.pointcloud_cameras.keys())
 
     def get_camera_fovy(self, camera_name):
         """Get vertical field-of-view of the camera."""

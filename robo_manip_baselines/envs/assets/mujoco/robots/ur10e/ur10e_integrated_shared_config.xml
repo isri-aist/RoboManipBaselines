@@ -1,0 +1,145 @@
+<mujoco model="ur10e_integrated_shared_config">
+  <default>
+    <default class="ur10e">
+      <material specular="0.5" shininess="0.25"/>
+      <joint axis="0 1 0" range="-6.28319 6.28319" armature="0.1"/>
+      <general gaintype="fixed" biastype="affine" ctrlrange="-6.2831 6.2831" gainprm="2000" biasprm="0 -2000 -400"
+               forcerange="-150 150"/>
+      <default class="size3">
+        <default class="size3_limited">
+          <joint range="-3.1415 3.1415"/>
+          <general ctrlrange="-3.1415 3.1415"/>
+        </default>
+      </default>
+      <default class="size4">
+        <joint range="-6.28319 6.28319" armature="0.12"/> <general gainprm="2500" biasprm="0 -2500 -500" forcerange="-200 200"/> 
+      </default>
+      <default class="size1">
+        <general gainprm="500" biasprm="0 -500 -100" forcerange="-28 28"/>
+      </default>
+      <default class="size2">
+        <general gainprm="700" biasprm="0 -700 -150" forcerange="-35 35"/> 
+      </default>
+
+
+      <default class="visual">
+        <geom type="mesh" contype="0" conaffinity="0" group="2"/>
+      </default>
+      <default class="collision">
+        <geom type="capsule" group="3"/>
+        <default class="eef_collision">
+          <geom type="cylinder"/>
+        </default>
+      </default>
+      <site size="0.001" rgba="0.5 0.5 0.5 0.3" group="4"/>
+    </default>
+
+    <!-- gripper: robotiq_2f85 -->
+    <default class="2f85">
+      <mesh scale="0.001 0.001 0.001"/>
+      <general biastype="affine"/>
+
+      <joint axis="1 0 0"/>
+      <default class="driver">
+        <joint range="0 0.8" armature="0.005" damping="0.01" solimplimit="0.95 0.99 0.001" solreflimit="0.005 1"/>
+      </default>
+      <default class="follower">
+        <joint range="-0.872664 0.872664" armature="0.01" pos="0 -0.018 0.0065" solimplimit="0.95 0.99 0.001" solreflimit="0.005 1"/>
+      </default>
+      <default class="spring_link">
+        <joint range="-0.29670597283 0.8" armature="0.01" stiffness="0.05" springref="2.62" damping="0.00125"/>
+      </default>
+      <default class="coupler">
+        <joint range="-1.57 0" armature="0.01" solimplimit="0.95 0.99 0.001" solreflimit="0.005 1"/>
+      </default>
+
+      <default class="gripper_visual">
+        <geom type="mesh" contype="0" conaffinity="0" group="2"/>
+      </default>
+      <default class="gripper_collision">
+        <geom type="mesh" group="3"/>
+        <default class="pad_box1">
+          <geom mass="0" type="box" pos="0 -0.0026 0.028125" size="0.011 0.004 0.009375" friction="0.7"
+                solimp="0.95 0.99 0.001" solref="0.004 1" priority="1" rgba="0.55 0.55 0.55 1"/>
+        </default>
+        <default class="pad_box2">
+          <geom mass="0" type="box" pos="0 -0.0026 0.009375" size="0.011 0.004 0.009375" friction="0.6"
+                solimp="0.95 0.99 0.001" solref="0.004 1" priority="1" rgba="0.45 0.45 0.45 1"/>
+        </default>
+      </default>
+    </default>
+
+    <!-- camera: d435i -->
+    <default class="d435i">
+      <material specular="0" shininess="0.25"/>
+      <default class="d435i_visual">
+        <geom group="2" type="mesh" contype="0" conaffinity="0" mass="0"/>
+      </default>
+      <default class="d435i_collision">
+        <geom group="3" type="mesh" mass="0"/>
+      </default>
+    </default>
+  </default>
+
+  <asset>
+    <material class="ur10e" name="black" rgba="0.033 0.033 0.033 1"/>
+    <material class="ur10e" name="jointgray" rgba="0.278 0.278 0.278 1"/>
+    <material class="ur10e" name="linkgray" rgba="0.82 0.82 0.82 1"/>
+    <material class="ur10e" name="urblue" rgba="0.49 0.678 0.8 1"/>
+
+    <mesh file="ur10e/base_0.obj"/>
+    <mesh file="ur10e/base_1.obj"/>
+    <mesh file="ur10e/shoulder_0.obj"/>
+    <mesh file="ur10e/shoulder_1.obj"/>
+    <mesh file="ur10e/shoulder_2.obj"/>
+    <mesh file="ur10e/upperarm_0.obj"/>
+    <mesh file="ur10e/upperarm_1.obj"/>
+    <mesh file="ur10e/upperarm_2.obj"/>
+    <mesh file="ur10e/upperarm_3.obj"/>
+    <mesh file="ur10e/forearm_0.obj"/>
+    <mesh file="ur10e/forearm_1.obj"/>
+    <mesh file="ur10e/forearm_2.obj"/>
+    <mesh file="ur10e/forearm_3.obj"/>
+    <mesh file="ur10e/wrist1_0.obj"/>
+    <mesh file="ur10e/wrist1_1.obj"/>
+    <mesh file="ur10e/wrist1_2.obj"/>
+    <mesh file="ur10e/wrist2_0.obj"/>
+    <mesh file="ur10e/wrist2_1.obj"/>
+    <mesh file="ur10e/wrist2_2.obj"/>
+    <mesh file="ur10e/wrist3.obj"/>
+
+    <!-- gripper: robotiq_2f85 -->
+    <material name="metal" rgba="0.58 0.58 0.58 1"/>
+    <material name="silicone" rgba="0.1882 0.1882 0.1882 1"/>
+    <material name="gray" rgba="0.4627 0.4627 0.4627 1"/>
+    <material name="gripper_black" rgba="0.149 0.149 0.149 1"/>
+
+    <mesh class="2f85" file="robotiq2/base_mount.stl"/>
+    <mesh class="2f85" file="robotiq2/gripper_base.stl"/>
+    <mesh class="2f85" file="robotiq2/driver.stl"/>
+    <mesh class="2f85" file="robotiq2/coupler.stl"/>
+    <mesh class="2f85" file="robotiq2/follower.stl"/>
+    <mesh class="2f85" file="robotiq2/pad.stl"/>
+    <mesh class="2f85" file="robotiq2/silicone_pad.stl"/>
+    <mesh class="2f85" file="robotiq2/spring_link.stl"/>
+
+    <!-- camera: d435i -->
+    <material class="d435i" name="Black_Acrylic" rgba="0.070360 0.070360 0.070360 1"/>
+    <material class="d435i" name="Cameras_Gray" rgba="0.296138 0.296138 0.296138 1"/>
+    <material class="d435i" name="IR_Emitter_Lens" rgba="0.287440 0.665387 0.327778 1"/>
+    <material class="d435i" name="IR_Lens" rgba="0.035601 0.035601 0.035601 1"/>
+    <material class="d435i" name="IR_Rim" rgba="0.799102 0.806952 0.799103 1"/>
+    <material class="d435i" name="Metal_Casing" rgba="1 1 1 1"/>
+    <material class="d435i" name="RGB_Pupil" rgba="0.087140 0.002866 0.009346 1"/>
+
+    <mesh name="d435i_0" file="d435i/d435i_0.obj"/>
+    <mesh name="d435i_1" file="d435i/d435i_1.obj"/>
+    <mesh name="d435i_2" file="d435i/d435i_2.obj"/>
+    <mesh name="d435i_3" file="d435i/d435i_3.obj"/>
+    <mesh name="d435i_4" file="d435i/d435i_4.obj"/>
+    <mesh name="d435i_5" file="d435i/d435i_5.obj"/>
+    <mesh name="d435i_6" file="d435i/d435i_6.obj"/>
+    <mesh name="d435i_7" file="d435i/d435i_7.obj"/>
+    <mesh name="d435i_8" file="d435i/d435i_8.obj"/>
+  </asset>
+</mujoco>
