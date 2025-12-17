@@ -9,6 +9,7 @@ import cv2
 import matplotlib.pylab as plt
 import numpy as np
 import yaml
+import pinocchio as pin
 
 from robo_manip_baselines.common import (
     DataKey,
@@ -79,6 +80,8 @@ class TeleopPhase(PhaseBase):
         super().start()
 
         self.op.teleop_time_idx = 0
+        # Reset the success counter for the new episode
+        self.op.success_steps_count = 0
         print(
             f"[{self.op.__class__.__name__}] Press the 'n' key to finish teleoperation."
         )
@@ -92,6 +95,22 @@ class TeleopPhase(PhaseBase):
         self.op.teleop_time_idx += 1
 
     def check_transition(self):
+        # --- MODIFIED LOGIC: Check for N consecutive successful steps ---
+        if self.op.args.success_steps_to_stop > 0:
+            if self.op.reward >= 1.0:
+                self.op.success_steps_count += 1
+                if self.op.success_steps_count >= self.op.args.success_steps_to_stop:
+                    print(
+                        f"[{self.op.__class__.__name__}] Achieved reward >= 1.0 for {self.op.args.success_steps_to_stop} consecutive steps. "
+                        f"Finishing teleoperation. duration: {self.get_elapsed_duration():.1f} [s]"
+                    )
+                    self.op.episode_duration = self.get_elapsed_duration()
+                    return True
+            else:
+                # Reset counter if reward drops below 1.0
+                self.op.success_steps_count = 0
+        # --- END MODIFIED LOGIC ---
+
         if self.op.key == ord("n"):
             print(
                 f"[{self.op.__class__.__name__}] Finish teleoperation. duration: {self.get_elapsed_duration():.1f} [s]"
@@ -207,6 +226,25 @@ class TeleopBase(OperationDataMixin, ABC):
         # Setup motion manager
         self.motion_manager = self.MotionManagerClass(self.env)
 
+        if self.args.eef_bound_min and self.args.eef_bound_max:
+            print(f"INFO: Applying safety bounds to ArmManagers.")
+            for manager in self.motion_manager.body_manager_list:
+                if hasattr(manager, 'pin_model'):  # A simple check for ArmManager
+                    manager.eef_bound_min = np.array(self.args.eef_bound_min)
+                    manager.eef_bound_max = np.array(self.args.eef_bound_max)
+                    print(f"  - Positional Bounds: min={manager.eef_bound_min}, max={manager.eef_bound_max}")
+
+        if self.args.eef_orientation_target and self.args.eef_orientation_max_dev is not None:
+            print(f"INFO: Applying orientation constraints to ArmManagers.")
+            for manager in self.motion_manager.body_manager_list:
+                if hasattr(manager, 'pin_model'):
+                    manager.eef_orientation_target = np.array(self.args.eef_orientation_target)
+                    manager.eef_orientation_max_dev_rad = np.deg2rad(self.args.eef_orientation_max_dev)
+                    # Convert target quaternion to rotation matrix for easier calculations
+                    manager.target_orientation_rot = pin.Quaternion(*manager.eef_orientation_target).toRotationMatrix()
+                    print(f"  - Orientation Target (quat): {manager.eef_orientation_target}")
+                    print(f"  - Max Deviation (deg): {self.args.eef_orientation_max_dev}")
+
         # Setup data manager
         self.data_manager = self.DataManagerClass(
             self.env, demo_name=self.demo_name, task_desc=self.args.task_desc
@@ -214,6 +252,9 @@ class TeleopBase(OperationDataMixin, ABC):
         self.data_manager.setup_camera_info()
         self.datetime_now = datetime.datetime.now()
         self.result = {key: [] for key in ("success", "reward", "duration")}
+
+        # State variable for consecutive success tracking
+        self.success_steps_count = 0
 
         if self.args.replay_log is not None:
             # Setup data manager for replay
@@ -260,6 +301,15 @@ class TeleopBase(OperationDataMixin, ABC):
         else:
             with open(self.args.input_device_config, "r") as f:
                 input_device_kwargs = yaml.safe_load(f)
+
+        # Apply scaling factors from arguments to kwargs
+        if self.args.pos_scale is not None:
+            input_device_kwargs['pos_scale'] = self.args.pos_scale
+        if self.args.rpy_scale is not None:
+            input_device_kwargs['rpy_scale'] = self.args.rpy_scale
+        if self.args.gripper_scale is not None:
+            input_device_kwargs['gripper_scale'] = self.args.gripper_scale
+
         if self.args.replay_log is None:
             self.input_device_list = self.env.unwrapped.setup_input_device(
                 self.args.input_device, self.motion_manager, input_device_kwargs
@@ -305,11 +355,56 @@ class TeleopBase(OperationDataMixin, ABC):
             "--input_device",
             type=str,
             default="spacemouse",
-            choices=["spacemouse", "gello", "keyboard"],
+            choices=["spacemouse", "gello", "keyboard", "keyboard_azerty"],
             help="input device for teleoperation",
         )
         parser.add_argument(
             "--input_device_config", type=str, help="configuration file of input device"
+        )
+        parser.add_argument(
+            "--eef-bound-min",
+            type=float,
+            nargs=3,
+            default=None,
+            help="Minimum [X, Y, Z] boundary for the end-effector.",
+        )
+        parser.add_argument(
+            "--eef-bound-max",
+            type=float,
+            nargs=3,
+            default=None,
+            help="Maximum [X, Y, Z] boundary for the end-effector.",
+        )
+        parser.add_argument(
+            "--eef-orientation-target",
+            type=float,
+            nargs=4,
+            default=None,
+            help="Target orientation as a quaternion [qw, qx, qy, qz].",
+        )
+        parser.add_argument(
+            "--eef-orientation-max-dev",
+            type=float,
+            default=None,
+            help="Maximum allowed deviation in degrees from the target orientation.",
+        )
+        parser.add_argument(
+            "--pos_scale",
+            type=float,
+            default=None,
+            help="Scaling factor for positional control (translation). Affects spacemouse and keyboard.",
+        )
+        parser.add_argument(
+            "--rpy_scale",
+            type=float,
+            default=None,
+            help="Scaling factor for rotational control (roll, pitch, yaw). Affects spacemouse and keyboard.",
+        )
+        parser.add_argument(
+            "--gripper_scale",
+            type=float,
+            default=None,
+            help="Scaling factor for gripper control. Affects spacemouse and keyboard.",
         )
 
         parser.add_argument(
@@ -685,9 +780,6 @@ class TeleopBase(OperationDataMixin, ABC):
         print(f"[{self.__class__.__name__}] Statistics on teleoperation")
         if len(self.iteration_duration_list) > 0:
             iteration_duration_arr = np.array(self.iteration_duration_list)
-            print(
-                f"  - Real-time factor | {self.env.unwrapped.dt / iteration_duration_arr.mean():.2f}"
-            )
             print(
                 "  - Iteration duration [s] | "
                 f"mean: {iteration_duration_arr.mean():.3f}, std: {iteration_duration_arr.std():.3f} "

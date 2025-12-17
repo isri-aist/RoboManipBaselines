@@ -2,6 +2,8 @@ from .base.PhaseBase import PhaseBase, ReachPhaseBase, GraspPhaseBase
 from .base.DatasetBase import DatasetBase
 from .base.TrainBase import TrainBase
 from .base.RolloutBase import RolloutBase
+from .base.TeleopRolloutBase import TeleopRolloutBase
+from .base.CroppedTrainBase import CroppedTrainBase
 
 from .data.DataKey import DataKey
 from .data.RmbData import RmbData

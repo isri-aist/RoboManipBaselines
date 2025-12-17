@@ -91,16 +91,19 @@ class MotionManager:
 
     def get_command_data(self, key):
         """Get command data of the specified key."""
+        # MODIFICATION START: Add COMMAND_EEF_POSE_REL to supported keys
         supported_data_keys = [
             DataKey.COMMAND_JOINT_POS,
             DataKey.COMMAND_GRIPPER_JOINT_POS,
             DataKey.COMMAND_EEF_POSE,
             DataKey.COMMAND_MOBILE_OMNI_VEL,
+            DataKey.COMMAND_EEF_POSE_REL,
         ]
         if key not in supported_data_keys:
             raise ValueError(
                 f"[{self.__class__.__name__}] Command data key is not supported: {key}"
             )
+        # MODIFICATION END
 
         command = np.zeros(DataKey.get_dim(key, self.env))
 
@@ -124,6 +127,13 @@ class MotionManager:
                     7 * body_manager.body_config.eef_idx : 7
                     * (body_manager.body_config.eef_idx + 1)
                 ] = single_command
+            # MODIFICATION START: Handle COMMAND_EEF_POSE_REL
+            elif key == DataKey.COMMAND_EEF_POSE_REL:
+                command[
+                    6 * body_manager.body_config.eef_idx : 6
+                    * (body_manager.body_config.eef_idx + 1)
+                ] = single_command
+            # MODIFICATION END
             else:
                 command[:] = single_command
 

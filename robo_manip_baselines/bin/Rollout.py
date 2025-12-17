@@ -19,6 +19,11 @@ class RolloutMain:
         "DiffusionPolicy3d",
         "FlowPolicy",
         "ManiFlowPolicy",
+        "LerobotAct",
+        "LerobotPi0",
+        "LerobotPi05",
+        "LerobotHilSerl",
+        "LerobotAcfql",
     ]
 
     def __init__(self):
