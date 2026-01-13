@@ -135,3 +135,19 @@ register(
     id="robo_manip_baselines/RealXarm7DemoEnv-v0",
     entry_point="robo_manip_baselines.envs.real.xarm7:RealXarm7DemoEnv",
 )
+
+# Real ur10e IRT
+register(
+    id="robo_manip_baselines/RealUR10eDemoEnv-v0",
+    entry_point="robo_manip_baselines.envs.real.ur10e:RealUR10eDemoEnv",
+)
+#Simu ur10e IRT
+register(
+    id="robo_manip_baselines/MujocoUR10eCableEnv-v0",
+    entry_point="robo_manip_baselines.envs.mujoco:MujocoUR10eCableEnv",
+)
+#Simu ure IRT
+register(
+    id="robo_manip_baselines/MujocoUR5eSimplePickEnv-v0",
+    entry_point="robo_manip_baselines.envs.mujoco:MujocoUR5eSimplePickEnv",
+)

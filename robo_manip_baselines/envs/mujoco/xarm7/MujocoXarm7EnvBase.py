@@ -8,6 +8,7 @@ from robo_manip_baselines.common import ArmConfig
 from robo_manip_baselines.teleop import (
     GelloInputDevice,
     KeyboardInputDevice,
+    AzertyKeyboardInputDevice,  # Added
     SpacemouseInputDevice,
 )
 
@@ -59,6 +60,8 @@ class MujocoXarm7EnvBase(MujocoEnvBase):
             InputDeviceClass = GelloInputDevice
         elif input_device_name == "keyboard":
             InputDeviceClass = KeyboardInputDevice
+        elif input_device_name == "keyboard_azerty":  # Added
+            InputDeviceClass = AzertyKeyboardInputDevice  # Added
         else:
             raise ValueError(
                 f"[{self.__class__.__name__}] Invalid input device key: {input_device_name}"

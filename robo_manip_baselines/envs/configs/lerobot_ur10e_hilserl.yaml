@@ -1,0 +1,119 @@
+# robomanipbaseline/envs/configs/lerobot_ur5e_hilserl.yaml
+
+# Path to the offline demonstration dataset, which must be pre-converted
+# to the LeRobotDataset format using the new conversion script.
+dataset:
+  repo_id: "local"
+  root: "/home/dev/dataset_baseline/lerobot/RealUR10eDemo_yellow_black_cubes_50/" #converted 
+
+# Environment configuration.
+env:
+  type: "RealUR10eDemo"
+  task: "Stack yellow cube on black cube"
+  processor:
+    reward_classifier:
+    #   pretrained_path: "/home/dev/checkpoint_baseline/lerobot_hilserl/RealUR10eDemo_20250922_122447_hilserl_reward_classifier/checkpoints/last/pretrained_model/"
+    #   success_threshold: 0.5
+    #   success_reward: 1.0
+    #   terminate_on_success: True
+
+# Policy configuration.
+# Based on Soft Actor-Critic (SAC) with HIL-SERL extensions.
+# Note: Input/output features are auto-generated during training.
+policy:
+  repo_id: "local"
+  type: "sac"
+  device: cuda
+  # storage_device: cuda:0
+      
+  # HIL-SERL specific communication settings for distributed actor/learner setup.
+  actor_learner_config:
+    learner_host: "127.0.0.1"
+    learner_port: 50051
+    # Frequency (in training steps) at which the actor pulls new policy parameters.
+    policy_parameters_push_frequency: 4 # User override (default: 4)
+    # Timeout for the actor when getting data from the queue.
+    queue_get_timeout: 2.0
+
+  # Concurrency settings for actor and learner. Can be "threads" or "processes".
+  concurrency:
+    actor: "threads"
+    learner: "threads"
+
+  # --- Architecture Specifics ---
+  # storage_device: "cuda:0"
+  # Name of the vision encoder model (e.g., "helper2424/resnet10" for HIL-SERL ResNet10).
+  vision_encoder_name: "helper2424/resnet10"
+  freeze_vision_encoder: true
+  image_encoder_hidden_dim: 32
+  shared_encoder: true
+  # Number of discrete actions, e.g., for gripper open/close.
+  num_discrete_actions: null # User override (default: null)
+  image_embedding_pooling_dim: 8
+  state_encoder_hidden_dim: 256
+  latent_dim: 256
+
+  # --- Online Training Parameters ---
+  # Total number of steps for online training.
+  online_steps: 1000000 # User override (default: 1000000)
+  # Number of random action steps before learning starts.
+  online_step_before_learning: 1 # User override (default: 100)
+  # Capacity of the online replay buffer.
+  online_buffer_capacity: 100000
+  # Capacity of the offline replay buffer (if used).
+  offline_buffer_capacity: 100000
+  async_prefetch: false
+  # Frequency of policy updates (in training steps).
+  policy_update_freq: 1
+  # Update-to-data (UTD) ratio. >1 enables UTD.
+  utd_ratio: 1 # User override (default: 1)
+
+  # --- SAC Algorithm Hyperparameters ---
+  discount: 0.99
+  temperature_init: 1.0
+  num_critics: 2
+  num_subsample_critics: null
+  critic_lr: 3.0e-4
+  actor_lr: 3.0e-4
+  temperature_lr: 3.0e-4
+  # Soft update weight for the target critic network (polyak averaging).
+  critic_target_update_weight: 0.005
+  # Target entropy for the SAC algorithm. If null, it's auto-calculated.
+  target_entropy: null
+  use_backup_entropy: true
+  # Maximum norm for gradient clipping.
+  grad_clip_norm: 40.0
+
+  # --- Network Configurations ---
+  critic_network_kwargs:
+    hidden_dims: [256, 256]
+    activate_final: true
+    final_activation: null
+  actor_network_kwargs:
+    hidden_dims: [256, 256]
+    activate_final: true
+  policy_kwargs:
+    use_tanh_squash: true
+    std_min: 1.0e-5
+    std_max: 10.0
+    init_final: 0.05
+  discrete_critic_network_kwargs:
+    hidden_dims: [256, 256]
+    activate_final: true
+    final_activation: null
+
+  # --- Optimizations ---
+  use_torch_compile: true
+
+# General training parameters
+job_name: "hilserl_ur10e"
+seed: 42
+batch_size: 8
+save_checkpoint: true
+save_freq: 1000
+log_freq: 5
+# device: "cuda"
+wandb:
+  enable: false
+  project: "robomanipbaseline_hilserl"
+
