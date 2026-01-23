@@ -110,7 +110,7 @@ real-xarm7 = [
   "hid",
 ]
 real-fr3 = [
-  "pylibfranka",
+  "franky-control",
 ]
 benchmarks = [
   "ruamel.yaml",
