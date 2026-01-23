@@ -149,6 +149,11 @@ class RealFR3EnvBase(RealEnvBase):
         # duration is ignored and only joint_vel_limit_scale is considered.
         self.robot.relative_dynamics_factor = np.clip(joint_vel_limit_scale, 0.1, 0.9)
 
+        # Overwrite duration or joint_pos for safety
+        action, duration = self.overwrite_command_for_safety(
+            action, duration, joint_vel_limit_scale
+        )
+
         # Send command to FR3
         arm_joint_pos_command = action[self.body_config_list[0].arm_joint_idxes]
         self.robot.move(JointMotion(arm_joint_pos_command), asynchronous=True)
@@ -160,7 +165,7 @@ class RealFR3EnvBase(RealEnvBase):
 
         # Wait
         elapsed_duration = time.time() - start_time
-        if wait and elapsed_duration < duration:
+        if wait and duration is not None and elapsed_duration < duration:
             time.sleep(duration - elapsed_duration)
 
     def _get_obs(self):
