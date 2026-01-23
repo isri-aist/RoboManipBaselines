@@ -111,6 +111,8 @@ real-xarm7 = [
 ]
 real-fr3 = [
   "franky-control",
+  "pyrealsense2",
+  "hid",
 ]
 benchmarks = [
   "ruamel.yaml",
