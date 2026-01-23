@@ -89,7 +89,7 @@ class RealFR3EnvBase(RealEnvBase):
         print(f"[{self.__class__.__name__}] Start connecting the FR3.")
         self.robot_ip = robot_ip
         self.robot = Robot(self.robot_ip)
-        self.robot.relative_dynamics_factor = 0.5
+        self.robot.relative_dynamics_factor = 0.3
         self.arm_joint_pos_actual = self.robot.state.q
         print(f"[{self.__class__.__name__}] Finish connecting the FR3.")
 
@@ -147,7 +147,8 @@ class RealFR3EnvBase(RealEnvBase):
 
         # Since franky does not have an API to specify duration,
         # duration is ignored and only joint_vel_limit_scale is considered.
-        self.robot.relative_dynamics_factor = np.clip(joint_vel_limit_scale, 0.1, 0.9)
+        joint_vel_limit_scale = np.clip(joint_vel_limit_scale, 1e-3, 0.3)
+        self.robot.relative_dynamics_factor = joint_vel_limit_scale
 
         # Overwrite duration or joint_pos for safety
         action, duration = self.overwrite_command_for_safety(
@@ -160,7 +161,7 @@ class RealFR3EnvBase(RealEnvBase):
 
         # Send command to Robotiq gripper
         gripper_pos = action[self.body_config_list[0].gripper_joint_idxes][0]
-        gripper_speed = 0.02  # [m/s]
+        gripper_speed = 0.1  # [m/s]
         self.gripper.move_async(gripper_pos, gripper_speed)
 
         # Wait

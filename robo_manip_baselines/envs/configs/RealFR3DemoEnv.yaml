@@ -1,7 +1,8 @@
-robot_ip: "192.168.11.4"
+robot_ip: "10.42.0.100"
 camera_ids:
-  front: "145522067924"
-  hand: "153122070885"
+  left: "337122074882"
+  right: "327122074912"
+  hand: "335122272292"
 # pointcloud_camera_ids:
 #   front: 0
 # gelsight_ids:
