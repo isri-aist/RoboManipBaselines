@@ -109,6 +109,9 @@ real-xarm7 = [
   "pyrealsense2",
   "hid",
 ]
+real-fr3 = [
+  "pylibfranka",
+]
 benchmarks = [
   "ruamel.yaml",
   "python-pptx",

@@ -232,3 +232,14 @@ $ pip install -e .[real-xarm7]
 $ cd third_party/gello_software
 $ pip install -e .
 ```
+
+### [Real FrankaResearch3 environments](../robo_manip_baselines/envs/real/fr3)
+Install dependent libraries including [gello_software](https://github.com/wuphilipp/gello_software):
+```console
+# Go to the top directory of this repository
+$ pip install -e .[real-fr3]
+
+# Go to the top directory of this repository
+$ cd third_party/gello_software
+$ pip install -e .
+```
