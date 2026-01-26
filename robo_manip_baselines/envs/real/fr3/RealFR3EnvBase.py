@@ -2,7 +2,15 @@ import time
 from os import path
 
 import numpy as np
-from franky import Gripper, JointMotion, Robot
+from franky import (
+    Duration,
+    Gripper,
+    JointMotion,
+    JointState,
+    JointWaypoint,
+    JointWaypointMotion,
+    Robot,
+)
 from gymnasium.spaces import Box, Dict
 
 from robo_manip_baselines.common import ArmConfig
@@ -90,7 +98,8 @@ class RealFR3EnvBase(RealEnvBase):
         self.robot_ip = robot_ip
         self.robot = Robot(self.robot_ip)
         self.robot.relative_dynamics_factor = 0.3
-        self.arm_joint_pos_actual = self.robot.state.q
+        self.arm_joint_pos_actual = np.array(self.robot.state.q)
+        self.arm_joint_pos_command = np.array(self.robot.state.q_d)
         print(f"[{self.__class__.__name__}] Finish connecting the FR3.")
 
         # Connect to Robotiq gripper
@@ -157,7 +166,31 @@ class RealFR3EnvBase(RealEnvBase):
 
         # Send command to FR3
         arm_joint_pos_command = action[self.body_config_list[0].arm_joint_idxes]
-        self.robot.move(JointMotion(arm_joint_pos_command), asynchronous=True)
+        if duration is None:
+            self.robot.move(JointMotion(arm_joint_pos_command), asynchronous=True)
+        else:
+            arm_joint_vel_command = (
+                arm_joint_pos_command - self.arm_joint_pos_command
+            ) / duration
+            self.robot.move(
+                JointWaypointMotion(
+                    [
+                        JointWaypoint(
+                            JointState(arm_joint_pos_command, arm_joint_vel_command),
+                            minimum_time=Duration(int(1e3 * duration)),
+                        ),
+                        JointWaypoint(
+                            JointState(
+                                arm_joint_pos_command
+                                + duration * arm_joint_vel_command,
+                                arm_joint_vel_command,
+                            )
+                        ),
+                    ]
+                ),
+                asynchronous=True,
+            )
+        self.arm_joint_pos_command = arm_joint_pos_command.copy()
 
         # Send command to Robotiq gripper
         gripper_pos = action[self.body_config_list[0].gripper_joint_idxes][0]
