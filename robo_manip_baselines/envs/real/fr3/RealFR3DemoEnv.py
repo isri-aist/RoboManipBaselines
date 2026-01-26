@@ -12,13 +12,13 @@ class RealFR3DemoEnv(RealFR3EnvBase):
             self,
             init_qpos=np.array(
                 [
-                    0.02443034,
-                    -0.55593735,
-                    -0.04863814,
-                    -2.25622463,
-                    -0.03409599,
-                    1.74467456,
-                    0.80417317,
+                    0.0,
+                    np.deg2rad(-30),
+                    0.0,
+                    np.deg2rad(-130),
+                    0.0,
+                    np.deg2rad(100),
+                    np.deg2rad(45),
                     0.05,
                 ]
             ),
