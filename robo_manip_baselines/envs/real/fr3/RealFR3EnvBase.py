@@ -166,7 +166,7 @@ class RealFR3EnvBase(RealEnvBase):
 
         # Send command to FR3
         arm_joint_pos_command = action[self.body_config_list[0].arm_joint_idxes]
-        if duration is None:
+        if duration > self.dt:
             self.robot.move(JointMotion(arm_joint_pos_command), asynchronous=True)
         else:
             arm_joint_vel_command = (
