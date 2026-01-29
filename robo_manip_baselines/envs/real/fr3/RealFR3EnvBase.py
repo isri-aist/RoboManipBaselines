@@ -182,9 +182,10 @@ class RealFR3EnvBase(RealEnvBase):
                         JointWaypoint(
                             JointState(
                                 arm_joint_pos_command
-                                + duration * arm_joint_vel_command,
-                                arm_joint_vel_command,
-                            )
+                                + 2 * duration * arm_joint_vel_command,
+                                np.zeros_like(arm_joint_vel_command),
+                            ),
+                            minimum_time=Duration(int(1e3 * 8 * duration)),
                         ),
                     ]
                 ),
