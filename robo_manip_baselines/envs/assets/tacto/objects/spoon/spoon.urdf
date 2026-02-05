@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<robot name="spoon">
+  <link name="spoon">
+    <visual>
+      <origin rpy="-1.5708 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="meshes/spoon.obj" />
+      </geometry>
+      <material name="gray-50">
+        <color rgba="0.5 0.5 0.5 0.5"/>
+      </material>
+    </visual>
+    <collision>
+      <origin rpy="-1.5708 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="meshes/vhacd_spoon.obj"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.01"/>
+      <inertia ixx="1.0" iyy="1.0" izz="1.0" ixy="0" ixz="0" iyz="0"/>
+    </inertial>
+  </link>
+</robot>

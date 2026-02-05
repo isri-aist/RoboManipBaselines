@@ -1,2 +1,3 @@
 from .TactoSawyerGraspEnv import TactoSawyerGraspEnv
 from .TactoSawyerInsertEnv import TactoSawyerInsertEnv
+from .TactoSawyerSpoonEnv import TactoSawyerSpoonEnv

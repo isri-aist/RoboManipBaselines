@@ -1,0 +1,114 @@
+<?xml version="1.0"?>
+<robot name="blue_box.urdf">
+  <material name="blue">
+    <color rgba="0 0 0.7 1"/>
+  </material>
+  <link name="bottom">
+    <visual>
+      <origin xyz="0 0 -0.2"/>
+      <geometry>
+        <box size="0.3 0.3 0.1"/>
+      </geometry>
+      <material name="blue"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 -0.15"/>
+      <geometry>
+        <box size="0.3 0.3 0.1"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.2"/>
+      <inertia ixx="1.0" iyy="1.0" izz="1.0" ixy="0" ixz="0" iyz="0"/>
+    </inertial>
+  </link>
+  <link name="edge_nx">
+    <visual>
+      <geometry>
+        <box size="0.025 0.3 0.5"/>
+      </geometry>
+      <material name="blue"/>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="0.025 0.3 0.5"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.2"/>
+      <inertia ixx="1.0" iyy="1.0" izz="1.0" ixy="0" ixz="0" iyz="0"/>
+    </inertial>
+  </link>
+  <link name="edge_px">
+    <visual>
+      <geometry>
+        <box size="0.025 0.3 0.5"/>
+      </geometry>
+      <material name="blue"/>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="0.025 0.3 0.5"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.2"/>
+      <inertia ixx="1.0" iyy="1.0" izz="1.0" ixy="0" ixz="0" iyz="0"/>
+    </inertial>
+  </link>
+  <link name="edge_ny">
+    <visual>
+      <geometry>
+        <box size="0.3 0.025 0.5"/>
+      </geometry>
+      <material name="blue"/>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="0.3 0.025 0.5"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.2"/>
+      <inertia ixx="1.0" iyy="1.0" izz="1.0" ixy="0" ixz="0" iyz="0"/>
+    </inertial>
+  </link>
+  <link name="edge_py">
+    <visual>
+      <geometry>
+        <box size="0.3 0.025 0.5"/>
+      </geometry>
+      <material name="blue"/>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="0.3 0.025 0.5"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.2"/>
+      <inertia ixx="1.0" iyy="1.0" izz="1.0" ixy="0" ixz="0" iyz="0"/>
+    </inertial>
+  </link>
+
+  <joint name="edge_joint_nx" type="fixed">
+    <origin xyz="-0.1455 0 0"/>
+    <parent link="bottom"/>
+    <child link="edge_nx"/>
+  </joint>
+  <joint name="edge_joint_px" type="fixed">
+    <origin xyz="0.1455 0 0"/>
+    <parent link="bottom"/>
+    <child link="edge_px"/>
+  </joint>
+  <joint name="edge_joint_ny" type="fixed">
+    <origin xyz="0 -0.1455 0"/>
+    <parent link="bottom"/>
+    <child link="edge_ny"/>
+  </joint>
+  <joint name="edge_joint_py" type="fixed">
+    <origin xyz="0 0.1455 0"/>
+    <parent link="bottom"/>
+    <child link="edge_py"/>
+  </joint>
+</robot>
