@@ -238,6 +238,7 @@ class DataManager:
         else:
             kwargs = {"world_idx": world_idx}
         self.world_idx = self.env.unwrapped.modify_world(**kwargs)
+        self.env.unwrapped.world_idx = self.world_idx
         self.meta_data["world_idx"] = self.world_idx
 
     def setup_camera_info(self):

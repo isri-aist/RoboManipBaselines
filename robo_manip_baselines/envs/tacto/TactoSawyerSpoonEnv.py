@@ -72,7 +72,7 @@ class TactoSawyerSpoonEnv(TactoSawyerEnvBase):
             global_scaling=self.box_scaling,
             use_fixed_base=True,
         )
-        self.blue_box = px.Body(
+        self.red_box = px.Body(
             urdf_path=path.join(
                 path.dirname(__file__), "../assets/tacto/objects/spoon/red_box.urdf"
             ),
@@ -81,8 +81,8 @@ class TactoSawyerSpoonEnv(TactoSawyerEnvBase):
             use_fixed_base=True,
         )
 
-        self.goal_boxes = [self.green_box, self.blue_box]
-        self.all_task_obj = [self.spoon, self.start_box, self.green_box, self.blue_box]
+        self.goal_boxes = [self.red_box, self.green_box]
+        self.all_task_obj = [self.spoon, self.start_box, self.green_box, self.red_box]
         for obj in self.all_task_obj:
             self.rgb_tactiles.add_body(obj)
 
@@ -93,14 +93,28 @@ class TactoSawyerSpoonEnv(TactoSawyerEnvBase):
     def _get_reward(self):
         (x, y, z), _ = self.spoon.get_base_pose()
         goal_height = 0.75 * self.box_scaling
-        for box in self.goal_boxes:
+        if self.world_idx == 0:
+            box = self.goal_boxes[0]
             (bx, by, _), _ = box.get_base_pose()
             bx_min = bx - (0.3 * self.box_scaling)
             bx_max = bx + (0.3 * self.box_scaling)
             by_min = by - (0.3 * self.box_scaling)
             by_max = by + (0.3 * self.box_scaling)
             if (
-                z < goal_height
+                z < goal_height - 0.1
+                and (bx_min < x and x < bx_max)
+                and (by_min < y and y < by_max)
+            ):
+                return 1.0
+        if self.world_idx == 1:
+            box = self.goal_boxes[1]
+            (bx, by, _), _ = box.get_base_pose()
+            bx_min = bx - (0.3 * self.box_scaling)
+            bx_max = bx + (0.3 * self.box_scaling)
+            by_min = by - (0.3 * self.box_scaling)
+            by_max = by + (0.3 * self.box_scaling)
+            if (
+                z < goal_height + 0.1
                 and (bx_min < x and x < bx_max)
                 and (by_min < y and y < by_max)
             ):
