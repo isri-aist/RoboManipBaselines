@@ -19,7 +19,7 @@ class GraspPhase1(GraspPhaseBase):
 
 class GraspPhase2(GraspPhaseBase):
     def set_target(self):
-        self.gripper_joint_pos = np.array([0.02])
+        self.gripper_joint_pos = np.array([0.018])
         self.duration = 0.2
 
 
