@@ -37,11 +37,11 @@ class TactoSawyerSpoonEnv(TactoSawyerEnvBase):
             roll=0,
         )
 
-        self.spoon_positions = np.array([[0.775, -0.034, 0.1], [0.755, -0.051, 0.25]])
+        self.spoon_positions = np.array([[0.775, -0.032, 0.1], [0.755, -0.051, 0.25]])
 
         self.spoon_orientations_rpy = np.array(
             [
-                [np.deg2rad(92), np.deg2rad(0), np.deg2rad(0)],
+                [np.deg2rad(94), np.deg2rad(0), np.deg2rad(0)],
                 [np.deg2rad(-88), np.deg2rad(-5), np.deg2rad(0)],
             ]
         )

@@ -6,7 +6,7 @@ from robo_manip_baselines.common import GraspPhaseBase, ReachPhaseBase
 
 
 def get_target_se3(op, pos_z):
-    target_pos = np.array([-0.54, 0.05, 0.5])
+    target_pos = np.array([-0.535, 0.05, 0.5])
     target_pos[2] = pos_z
     return pin.SE3(np.array([[0, 1, 0], [1, 0, 0], [0, 0, -1]]), target_pos)
 
@@ -26,7 +26,7 @@ class GraspPhase1(GraspPhaseBase):
 
 class ReachPhase2(ReachPhaseBase):
     def set_target(self):
-        self.target_se3 = get_target_se3(self.op, pos_z=0.65)
+        self.target_se3 = get_target_se3(self.op, pos_z=0.64)
 
         self.duration = 0.4
 

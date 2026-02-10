@@ -67,8 +67,13 @@ class Camera:
             lightDirection=[1, 1, 1],
             renderer=p.ER_BULLET_HARDWARE_OPENGL,
         )
-        rgb = img_arr[2][:, :, :3]  # color image RGB H x W x 3 (uint8)
-        dep = img_arr[3]  # depth image H x W (float32)
+        img_np = np.array(img_arr[2], dtype=np.uint8).reshape(
+            (self.height, self.width, 4)
+        )
+        rgb = img_np[:, :, :3]  # color image RGB H x W x 3 (uint8)
+        dep = np.array(img_arr[3], dtype=np.float32).reshape(
+            (self.height, self.width)
+        )  # depth image H x W (float32)
 
         near = self.nearPlane
         far = self.farPlane
@@ -111,13 +116,14 @@ class TactoSawyerEnvBase(EnvDataMixin, gym.Env, ABC):
         self.reset()
 
         # Setup environment parameters
-        self.dt = 0.02  # [s]
+        self.dt = 0.03  # [s]
+        self.sim_dt = 0.005  # [s]
 
         p.setPhysicsEngineParameter(
             numSolverIterations=200, solverResidualThreshold=1e-8, enableConeFriction=1
         )
         p.setGravity(0, 0, -9.8)
-        p.setTimeStep(self.dt)
+        p.setTimeStep(self.sim_dt)
 
         self.action_space = Box(
             low=np.concatenate(
@@ -279,8 +285,9 @@ class TactoSawyerEnvBase(EnvDataMixin, gym.Env, ABC):
         return {"gripper_scale": 0.002}
 
     def step(self, action):
-        self._set_actions(action)
-        p.stepSimulation()
+        for _ in range(int(self.dt / self.sim_dt)):
+            self._set_actions(action)
+            p.stepSimulation()
         self.sim_time += self.dt
 
         self.obs = self._get_obs()
