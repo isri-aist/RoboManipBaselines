@@ -6,7 +6,7 @@
         <box size=".03 .03 .136"/>
       </geometry>
       <material name="blue">
-        <color rgba="0.2 0.2 0.8 1"/>
+        <color rgba="0.2 0.2 0.8 0"/>
       </material>
     </visual>
     <collision>

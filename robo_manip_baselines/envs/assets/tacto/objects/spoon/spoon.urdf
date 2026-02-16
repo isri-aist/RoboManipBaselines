@@ -6,8 +6,8 @@
       <geometry>
         <mesh filename="meshes/spoon.obj" />
       </geometry>
-      <material name="gray-50">
-        <color rgba="0.5 0.5 0.5 0.5"/>
+      <material name="gray-10">
+        <color rgba="0.5 0.5 0.5 0.1"/>
       </material>
     </visual>
     <collision>
