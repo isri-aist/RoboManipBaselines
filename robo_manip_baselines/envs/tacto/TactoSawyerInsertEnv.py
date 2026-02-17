@@ -14,7 +14,7 @@ class TactoSawyerInsertEnv(TactoSawyerEnvBase):
     ):
         self.board_pos_offsets = np.array(
             [
-                [-0.04, 0.0, -0.009],
+                [-0.043, 0.0, -0.009],
                 [-0.015, 0.0, 0.005],
                 [0.0, 0.0, 0.01],
                 [0.015, 0.0, 0.005],
@@ -23,7 +23,7 @@ class TactoSawyerInsertEnv(TactoSawyerEnvBase):
         )  # [m]
         self.cube_pos_offsets = np.array(
             [
-                [-0.096, 0.0, -0.05],
+                [-0.099, 0.0, -0.05],
                 [-0.045, 0.0, -0.05],
                 [-0.001, 0.0, 0.0],
                 [0.016, 0.0, 0.0],
@@ -32,7 +32,7 @@ class TactoSawyerInsertEnv(TactoSawyerEnvBase):
         )  # [m]
         self.cube2_pos_offsets = np.array(
             [
-                [-0.031, 0.0, 0.0],
+                [-0.034, 0.0, 0.0],
                 [-0.016, 0.0, 0.0],
                 [0.001, 0.0, 0.0],
                 [0.045, 0.0, -0.05],

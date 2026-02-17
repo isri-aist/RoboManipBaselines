@@ -5,8 +5,8 @@
       <geometry>
         <box size=".008 .05 .29"/>
       </geometry>
-      <material name="green-50">
-        <color rgba="0.2 0.8 0.2 0.5"/>
+      <material name="green-10">
+        <color rgba="0.2 0.8 0.2 0.1"/>
       </material>
     </visual>
     <collision>
