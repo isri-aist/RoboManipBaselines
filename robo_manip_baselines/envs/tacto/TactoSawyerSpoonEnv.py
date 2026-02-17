@@ -80,6 +80,14 @@ class TactoSawyerSpoonEnv(TactoSawyerEnvBase):
             global_scaling=self.box_scaling,
             use_fixed_base=True,
         )
+        self.obj = px.Body(
+            urdf_path=path.join(
+                path.dirname(__file__), "../assets/tacto/objects/spoon/cube.urdf"
+            ),
+            base_position=[0.78, -0.025, 0.1],
+            global_scaling=0.68,
+            use_fixed_base=True,
+        )
 
         self.goal_boxes = [self.red_box, self.green_box]
         self.all_task_obj = [self.spoon, self.start_box, self.green_box, self.red_box]
