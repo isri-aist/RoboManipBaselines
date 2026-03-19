@@ -86,14 +86,14 @@ class ConvertRmbDataToLerobot:
             for camera_name in self.camera_name_list:
                 rgb_image_key = DataKey.get_rgb_image_key(camera_name)
                 rgb_image_shape = rmb_data[rgb_image_key][0].shape
-                print(rgb_image_shape, (3, 480, 640))
+                print(rgb_image_shape, (480, 640, 3))
                 features[f"observation.images.{camera_name}_rgb"] = {
                     "dtype": mode,
                     "shape": rgb_image_shape,
                     "names": [
-                        "channels",
                         "height",
                         "width",
+                        "channels",
                     ],
                 }
 
