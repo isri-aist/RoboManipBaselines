@@ -16,8 +16,13 @@ from robo_manip_baselines.common import (
     normalize_data,
 )
 
+from .RolloutVisualPrompts import RolloutVisualPrompts
 
-class RolloutDiffusionPolicy(RolloutBase):
+
+class RolloutDiffusionPolicy(RolloutVisualPrompts, RolloutBase):
+    def set_additional_args(self, parser):
+        self.set_args_for_visual_prompts(parser)
+
     def setup_policy(self):
         # For backward compatibility
         if "backbone" not in self.model_meta_info["policy"]:
@@ -91,12 +96,19 @@ class RolloutDiffusionPolicy(RolloutBase):
         )
         super().setup_plot(fig_ax)
 
+    def setup_variables(self):
+        super().setup_variables()
+
+        self.setup_variables_for_visual_prompts()
+
     def reset_variables(self):
         super().reset_variables()
 
         self.state_buf = None
         self.images_buf = None
         self.policy_action_buf = None
+
+        self.reset_variables_for_visual_prompts()
 
     def infer_policy(self):
         # Update observation buffer
@@ -152,6 +164,9 @@ class RolloutDiffusionPolicy(RolloutBase):
 
             image = cv2.resize(image, self.model_meta_info["data"]["image_size"])
 
+            if self.args.visual_prompt:
+                image = self.overlay_visual_prompts(camera_name, image)
+
             image = np.moveaxis(image, -1, -3)
             image = torch.tensor(image, dtype=torch.uint8)
             image = self.image_transforms(image)
@@ -182,8 +197,16 @@ class RolloutDiffusionPolicy(RolloutBase):
             _ax.cla()
             _ax.axis("off")
 
-        # Plot images
-        self.plot_images(self.ax[0, 0 : len(self.camera_names)])
+        # Plot images (with visual prompts)
+        for camera_idx, camera_name in enumerate(self.camera_names):
+            image = self.info["rgb_images"][camera_name]
+            image = cv2.resize(image, self.model_meta_info["data"]["image_size"])
+
+            if self.args.visual_prompt:
+                image = self.overlay_visual_prompts(camera_name, image)
+
+            self.ax[0, camera_idx].imshow(image)
+            self.ax[0, camera_idx].set_title(camera_name, fontsize=20)
 
         # Plot action
         self.plot_action(self.ax[1, 0])
@@ -194,3 +217,7 @@ class RolloutDiffusionPolicy(RolloutBase):
             self.policy_name,
             cv2.cvtColor(np.asarray(self.canvas.buffer_rgba()), cv2.COLOR_RGB2BGR),
         )
+
+    def run(self):
+        super().run()
+        self.save_visual_prompts()
