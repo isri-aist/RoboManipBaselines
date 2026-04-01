@@ -145,3 +145,9 @@ register(
     id="robo_manip_baselines/RealXarm7DemoEnv-v0",
     entry_point="robo_manip_baselines.envs.real.xarm7:RealXarm7DemoEnv",
 )
+
+## FrankaResearch3
+register(
+    id="robo_manip_baselines/RealFR3DemoEnv-v0",
+    entry_point="robo_manip_baselines.envs.real.fr3:RealFR3DemoEnv",
+)
