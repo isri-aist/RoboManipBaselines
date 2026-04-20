@@ -120,6 +120,11 @@ real-xarm7 = [
   "pyrealsense2",
   "hid",
 ]
+real-fr3 = [
+  "franky-control",
+  "pyrealsense2",
+  "hid",
+]
 benchmarks = [
   "ruamel.yaml",
   "python-pptx",
