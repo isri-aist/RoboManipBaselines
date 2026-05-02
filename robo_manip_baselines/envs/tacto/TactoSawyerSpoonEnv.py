@@ -64,7 +64,7 @@ class TactoSawyerSpoonEnv(TactoSawyerEnvBase):
             global_scaling=self.box_scaling,
             use_fixed_base=True,
         )
-        self.green_box = px.Body(
+        self.goal_box_green = px.Body(
             urdf_path=path.join(
                 path.dirname(__file__), "../assets/tacto/objects/spoon/green_box.urdf"
             ),
@@ -72,7 +72,7 @@ class TactoSawyerSpoonEnv(TactoSawyerEnvBase):
             global_scaling=self.box_scaling,
             use_fixed_base=True,
         )
-        self.red_box = px.Body(
+        self.goal_box_red = px.Body(
             urdf_path=path.join(
                 path.dirname(__file__), "../assets/tacto/objects/spoon/red_box.urdf"
             ),
@@ -80,7 +80,7 @@ class TactoSawyerSpoonEnv(TactoSawyerEnvBase):
             global_scaling=self.box_scaling,
             use_fixed_base=True,
         )
-        self.obj = px.Body(
+        self.cube = px.Body(
             urdf_path=path.join(
                 path.dirname(__file__), "../assets/tacto/objects/spoon/cube.urdf"
             ),
@@ -89,9 +89,15 @@ class TactoSawyerSpoonEnv(TactoSawyerEnvBase):
             use_fixed_base=True,
         )
 
-        self.goal_boxes = [self.red_box, self.green_box]
-        self.all_task_obj = [self.spoon, self.start_box, self.green_box, self.red_box]
-        for obj in self.all_task_obj:
+        self.goal_boxes = [self.goal_box_red, self.goal_box_green]
+
+        contact_obj_list = [
+            self.spoon,
+            self.start_box,
+            self.goal_box_green,
+            self.goal_box_red,
+        ]
+        for obj in contact_obj_list:
             self.rgb_tactiles.add_body(obj)
 
     def reset_task_specific_object(self):

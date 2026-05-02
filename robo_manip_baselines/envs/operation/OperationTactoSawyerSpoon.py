@@ -14,7 +14,6 @@ def get_target_se3(op, pos_z):
 class ReachPhase1(ReachPhaseBase):
     def set_target(self):
         self.target_se3 = get_target_se3(self.op, pos_z=0.7)
-
         self.duration = 0.4
 
 
@@ -27,7 +26,6 @@ class GraspPhase1(GraspPhaseBase):
 class ReachPhase2(ReachPhaseBase):
     def set_target(self):
         self.target_se3 = get_target_se3(self.op, pos_z=0.65)
-
         self.duration = 0.4
 
 

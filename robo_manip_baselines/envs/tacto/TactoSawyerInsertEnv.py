@@ -21,7 +21,7 @@ class TactoSawyerInsertEnv(TactoSawyerEnvBase):
                 [0.04, 0.0, -0.009],
             ]
         )  # [m]
-        self.cube_pos_offsets = np.array(
+        self.cube1_pos_offsets = np.array(
             [
                 [-0.099, 0.0, -0.05],
                 [-0.045, 0.0, -0.05],
@@ -47,7 +47,7 @@ class TactoSawyerInsertEnv(TactoSawyerEnvBase):
                 [0.0, -20.0, 0.0],
                 [0.0, -40.0, 0.0],
             ]
-        )
+        )  # [deg]
 
         TactoSawyerEnvBase.__init__(
             self,
@@ -67,14 +67,14 @@ class TactoSawyerInsertEnv(TactoSawyerEnvBase):
         )
 
     def setup_task_specific_object(self):
-        self.obj = px.Body(
+        self.board = px.Body(
             urdf_path=path.join(
                 path.dirname(__file__), "../assets/tacto/objects/insert/board.urdf"
             ),
             base_position=[0.505, -0.03, 0.077],
             global_scaling=0.6,
         )
-        self.obj2 = px.Body(
+        self.cube1 = px.Body(
             urdf_path=path.join(
                 path.dirname(__file__), "../assets/tacto/objects/insert/cube.urdf"
             ),
@@ -82,7 +82,7 @@ class TactoSawyerInsertEnv(TactoSawyerEnvBase):
             global_scaling=0.68,
             use_fixed_base=True,
         )
-        self.obj3 = px.Body(
+        self.cube2 = px.Body(
             urdf_path=path.join(
                 path.dirname(__file__), "../assets/tacto/objects/insert/cube.urdf"
             ),
@@ -90,7 +90,7 @@ class TactoSawyerInsertEnv(TactoSawyerEnvBase):
             global_scaling=0.68,
             use_fixed_base=True,
         )
-        self.obj4 = px.Body(
+        self.box = px.Body(
             urdf_path=path.join(
                 path.dirname(__file__), "../assets/tacto/objects/insert/box.urdf"
             ),
@@ -99,14 +99,14 @@ class TactoSawyerInsertEnv(TactoSawyerEnvBase):
             use_fixed_base=True,
         )
 
-        self.rgb_tactiles.add_body(self.obj)
+        self.rgb_tactiles.add_body(self.board)
 
     def reset_task_specific_object(self):
         pass
 
     def _get_reward(self):
-        (x, y, z), _ = self.obj.get_base_pose()
-        (xt, yt, zt), _ = self.obj4.get_base_pose()
+        (x, y, z), _ = self.board.get_base_pose()
+        (xt, yt, zt), _ = self.box.get_base_pose()
 
         if abs(x - xt) < 0.01 and abs(y - yt) < 0.07 and z < 0.1:
             return 1.0
@@ -118,16 +118,16 @@ class TactoSawyerInsertEnv(TactoSawyerEnvBase):
         if world_idx is None:
             world_idx = 1
 
-        pos = self.obj.init_base_position.copy() + self.board_pos_offsets[world_idx]
-        pos2 = self.obj2.init_base_position.copy() + self.cube_pos_offsets[world_idx]
-        pos3 = self.obj3.init_base_position.copy() + self.cube2_pos_offsets[world_idx]
+        pos = self.board.init_base_position.copy() + self.board_pos_offsets[world_idx]
+        pos2 = self.cube1.init_base_position.copy() + self.cube1_pos_offsets[world_idx]
+        pos3 = self.cube2.init_base_position.copy() + self.cube2_pos_offsets[world_idx]
         rot = R.from_euler("xyz", self.rotation_offsets[world_idx], degrees=True)
         if self.world_random_scale is not None:
             pos += np.random.uniform(
                 low=-1.0 * self.world_random_scale, high=self.world_random_scale, size=3
             )
-        self.obj.set_base_pose(pos, rot.as_quat())
-        self.obj2.set_base_pose(pos2)
-        self.obj3.set_base_pose(pos3)
+        self.board.set_base_pose(pos, rot.as_quat())
+        self.cube1.set_base_pose(pos2)
+        self.cube2.set_base_pose(pos3)
 
         return world_idx
