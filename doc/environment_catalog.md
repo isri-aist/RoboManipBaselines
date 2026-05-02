@@ -137,6 +137,16 @@ Task to pick a box with optical tactile sensing at the fingertips.
 
 https://github.com/user-attachments/assets/0e119da0-5ff8-4129-ab0d-c0f2bd5ec04a
 
+#### TactoSawyerInsert
+Task to insert a thin transparent plate into a box with optical tactile sensing at the fingertips.
+
+https://github.com/user-attachments/assets/b80fd89e-c97b-45b9-b6f6-ce522a6c6bdd
+
+#### TactoSawyerSpoon
+Task to sort transparent spoons into boxes according to their orientation with optical tactile sensing at the fingertips.
+
+https://github.com/user-attachments/assets/1f0d4d50-a5f7-4f2b-95f3-aedf38cdb781
+
 ## Real-world environments
 ### UR5e
 #### RealUR5eDemo
