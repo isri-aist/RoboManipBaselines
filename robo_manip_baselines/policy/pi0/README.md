@@ -53,7 +53,7 @@ Convert RMB dataset into the LeRobot dataset format.
 # Use Env 1
 # Go to the top directory of this repository
 $ cd robo_manip_baselines
-$ python misc/ConvertRmbDataToLerobot.py <rmb_dataset_dir> --output_dir <lerobot_dataset_dir>
+$ uv run python misc/ConvertRmbDataToLerobot.py <rmb_dataset_dir> --output_dir <lerobot_dataset_dir>
 ```
 
 ## Model Training
@@ -103,7 +103,7 @@ Run a trained policy in the simulator.
 # Use Env 3
 # Go to the top directory of this repository
 $ cd robo_manip_baselines
-$ python ./bin/Rollout.py Pi0 <task_name> --checkpoint <checkpoint_dir> --world_idx 0 --task_desc <task_description_text>
+$ uv run python ./bin/Rollout.py Pi0 <task_name> --checkpoint <checkpoint_dir> --world_idx 0 --task_desc <task_description_text>
 ```
 
 > [!NOTE]

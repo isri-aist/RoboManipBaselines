@@ -11,7 +11,7 @@ Specify the task description (language instruction) and store it in the dataset:
 ```console
 # Go to the top directory of this repository
 $ cd robo_manip_baselines
-$ python ./misc/RefineRmbData.py ./dataset/<dataset_name> --task_desc <task_desc>
+$ uv run python ./misc/RefineRmbData.py ./dataset/<dataset_name> --task_desc <task_desc>
 ```
 An example of `<task_desc>` is "Pass the cable between the two pins."
 
@@ -20,7 +20,7 @@ Train a model:
 ```console
 # Go to the top directory of this repository
 $ cd robo_manip_baselines
-$ python ./bin/Train.py MtAct --dataset_dir ./dataset/<dataset_name> --checkpoint_dir ./checkpoint/MtAct/<checkpoint_name>
+$ uv run python ./bin/Train.py MtAct --dataset_dir ./dataset/<dataset_name> --checkpoint_dir ./checkpoint/MtAct/<checkpoint_name>
 ```
 
 ## Policy rollout
@@ -28,7 +28,7 @@ Run a trained policy:
 ```console
 # Go to the top directory of this repository
 $ cd robo_manip_baselines
-$ python ./bin/Rollout.py MtAct MujocoUR5eCable --checkpoint ./checkpoint/MtAct/<checkpoint_name>/policy_last.ckpt --task_desc "Pick up an object"
+$ uv run python ./bin/Rollout.py MtAct MujocoUR5eCable --checkpoint ./checkpoint/MtAct/<checkpoint_name>/policy_last.ckpt --task_desc "Pick up an object"
 ```
 
 ## Technical Details

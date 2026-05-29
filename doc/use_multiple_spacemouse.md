@@ -4,10 +4,10 @@ For high-degree-of-freedom robots such as dual-arm manipulators or mobile manipu
 To enable such teleoperation, specify the device configuration file using the `--input_device_config` argument in `Teleop.py` as shown below.
 ```console
 # Example for a dual-arm manipulator
-$ python ./bin/Teleop.py MujocoUR5eDualCable --input_device_config ./teleop/configs/SpaceMouseDual.yaml
+$ uv run python ./bin/Teleop.py MujocoUR5eDualCable --input_device_config ./teleop/configs/SpaceMouseDual.yaml
 
 # Example for a mobile manipulator
-$ python ./bin/Teleop.py MujocoHsrTidyup --input_device_config ./teleop/configs/SpaceMouseDual.yaml
+$ uv run python ./bin/Teleop.py MujocoHsrTidyup --input_device_config ./teleop/configs/SpaceMouseDual.yaml
 ```
 
 The contents of `SpaceMouseDual.yaml` are as follows.

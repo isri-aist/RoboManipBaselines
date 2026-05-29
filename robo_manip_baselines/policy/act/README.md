@@ -11,7 +11,7 @@ Train a model:
 ```console
 # Go to the top directory of this repository
 $ cd robo_manip_baselines
-$ python ./bin/Train.py Act --dataset_dir ./dataset/<dataset_name> --checkpoint_dir ./checkpoint/Act/<checkpoint_name>
+$ uv run python ./bin/Train.py Act --dataset_dir ./dataset/<dataset_name> --checkpoint_dir ./checkpoint/Act/<checkpoint_name>
 ```
 
 > [!NOTE]
@@ -26,7 +26,7 @@ Run a trained policy:
 ```console
 # Go to the top directory of this repository
 $ cd robo_manip_baselines
-$ python ./bin/Rollout.py Act MujocoUR5eCable --checkpoint ./checkpoint/Act/<checkpoint_name>/policy_last.ckpt
+$ uv run python ./bin/Rollout.py Act MujocoUR5eCable --checkpoint ./checkpoint/Act/<checkpoint_name>/policy_last.ckpt
 ```
 
 ## Technical Details

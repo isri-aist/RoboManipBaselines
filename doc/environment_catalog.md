@@ -4,7 +4,7 @@ You can teleoperate a robot in each environment by giving `<env_name>` (e.g. `Mu
 ```console
 # Go to the top directory of this repository
 $ cd robo_manip_baselines
-$ python ./bin/Teleop.py <env_name>
+$ uv run python ./bin/Teleop.py <env_name>
 ```
 
 ## MuJoCo environments

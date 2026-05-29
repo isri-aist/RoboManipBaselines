@@ -37,7 +37,16 @@ Start collecting data in the **MuJoCo** simulation, train your model, and rollou
 
 ## ⚙️ Installation
 
-Follow our step-by-step [Installation Guide](./doc/install.md) to get set up smoothly.
+This project is managed with [uv](https://docs.astral.sh/uv/). Quick start:
+
+```bash
+git clone git@github.com:isri-aist/RoboManipBaselines.git --recursive
+cd RoboManipBaselines
+uv sync                  # base / common install
+uv sync --extra act      # add an optional policy (e.g. ACT)
+```
+
+For the full per-policy / per-env / per-device setup (including the `third_party/` submodules), follow the step-by-step [Installation Guide](./doc/install.md).
 
 ---
 

@@ -2,18 +2,15 @@
 This quick start allows you to collect data in the MuJoCo simulation and train and rollout the ACT policy.
 
 ## Install
-Install RoboManipBaselines:
+This project is managed with [uv](https://docs.astral.sh/uv/). Install RoboManipBaselines (the ACT third-party package is resolved automatically via `[tool.uv.sources]`):
 ```console
 $ git clone git@github.com:isri-aist/RoboManipBaselines.git --recursive
 $ cd RoboManipBaselines
-$ pip install -e .[act]
+$ uv sync --extra act
 ```
 
-Install ACT from a third party:
-```console
-$ cd third_party/act/detr
-$ pip install -e .
-```
+> [!TIP]
+> Activate the venv with `source .venv/bin/activate` so that the `python` commands below run inside it, or prefix each command with `uv run` (e.g. `uv run python ./bin/Teleop.py ...`).
 
 ## Data collection by teleoperation
 > [!TIP]
@@ -24,7 +21,7 @@ Operate the robot in the simulation and save the data:
 # Go to the top directory of this repository
 $ cd robo_manip_baselines
 $ # Connect a SpaceMouse to your PC
-$ python ./bin/Teleop.py MujocoUR5eCable --world_idx_list 0 5 --input_device keyboard
+$ uv run python ./bin/Teleop.py MujocoUR5eCable --world_idx_list 0 5 --input_device keyboard
 ```
 
 > [!TIP]
@@ -38,7 +35,7 @@ Train the ACT:
 ```console
 # Go to the top directory of this repository
 $ cd robo_manip_baselines
-$ python ./bin/Train.py Act --dataset_dir ./dataset/MujocoUR5eCable_20240101_120000
+$ uv run python ./bin/Train.py Act --dataset_dir ./dataset/MujocoUR5eCable_20240101_120000
 ```
 The learned parameters are saved in the `robo_manip_baselines/checkpoint/Act/<dataset_name>_Act_<date_suffix>` directory (e.g., `MujocoUR5eCable_20240101_120000_Act_20240101_130000`).
 
@@ -54,7 +51,7 @@ Rollout the ACT in the simulation:
 ```console
 # Go to the top directory of this repository
 $ cd robo_manip_baselines
-$ python ./bin/Rollout.py Act MujocoUR5eCable \
+$ uv run python ./bin/Rollout.py Act MujocoUR5eCable \
 --checkpoint ./checkpoint/Act/MujocoUR5eCable_20240101_120000_Act_20240101_130000/policy_last.ckpt \
 --world_idx 0
 ```

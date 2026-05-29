@@ -14,7 +14,7 @@ Train a model:
 ```console
 # Go to the top directory of this repository
 $ cd robo_manip_baselines
-$ python ./bin/Train.py DiffusionPolicy3d --dataset_dir ./dataset/<dataset_name> --checkpoint_dir ./checkpoint/DiffusionPolicy3d/<checkpoint_name>
+$ uv run python ./bin/Train.py DiffusionPolicy3d --dataset_dir ./dataset/<dataset_name> --checkpoint_dir ./checkpoint/DiffusionPolicy3d/<checkpoint_name>
 ```
 
 > [!NOTE]
@@ -32,7 +32,7 @@ Run a trained policy:
 ```console
 # Go to the top directory of this repository
 $ cd robo_manip_baselines
-$ python ./bin/Rollout.py DiffusionPolicy3d MujocoUR5eCable --checkpoint ./checkpoint/DiffusionPolicy3d/<checkpoint_name>/policy_last.ckpt
+$ uv run python ./bin/Rollout.py DiffusionPolicy3d MujocoUR5eCable --checkpoint ./checkpoint/DiffusionPolicy3d/<checkpoint_name>/policy_last.ckpt
 ```
 
 ## Technical Details

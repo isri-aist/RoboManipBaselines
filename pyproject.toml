@@ -14,7 +14,7 @@ authors = [
 maintainers = [
   {name = "Masaki Murooka", email = "m-murooka@aist.go.jp"},
 ]
-requires-python = ">= 3.8"
+requires-python = ">=3.10,<3.13"
 dependencies = [
   "ipdb",
   "ipython",
@@ -44,15 +44,18 @@ dynamic = ["version"]
 
 [project.optional-dependencies]
 sarnn = [
+  "eipl",
   "scikit-learn>=1.3.0",
   "torchinfo",
   "gdown",
 ]
 act = [
+  "detr",
   "packaging",
   "pyquaternion",
 ]
 mt-act = [
+  "detr",
   "packaging",
   "pyquaternion",
   "lru_cache",
@@ -60,6 +63,7 @@ mt-act = [
   "sentence-transformers",
 ]
 diffusion-policy = [
+  "diffusion_policy",
   "cffi",
   "zarr>=2.12.0",
   "numcodecs",
@@ -71,6 +75,8 @@ diffusion-policy = [
   "huggingface_hub==0.21.4",
 ]
 diffusion-policy-3d = [
+  "diffusion_policy_3d",
+  "pytorch3d",
   "zarr==2.12.0",
   "omegaconf",
   "hydra-core==1.2.0",
@@ -80,6 +86,8 @@ diffusion-policy-3d = [
   "open3d",
 ]
 flow-policy = [
+  "flow_policy_3d",
+  "pytorch3d",
   "zarr==2.12.0",
   "omegaconf",
   "hydra-core==1.2.0",
@@ -89,6 +97,9 @@ flow-policy = [
   "open3d",
 ]
 maniflow-policy = [
+  "maniflow",
+  "pytorch3d",
+  "r3m",
   "zarr==2.12.0",
   "omegaconf",
   "hydra-core==1.2.0",
@@ -97,9 +108,13 @@ maniflow-policy = [
   "diffusers==0.11.1",
   "open3d",
   "timm",
-  "huggingface_hub<=0.25.0"
+  "huggingface_hub<=0.25.0",
 ]
 tacto = [
+  "tacto",
+  "attrdict",
+  "urdfpy",
+  "pybulletX",
   "pybullet",
   "omegaconf>=2.0.6",
   "pyrender",
@@ -108,14 +123,22 @@ tacto = [
   "networkx",
   "pycollada",
   "trimesh",
-  "pyopengl@git+https://github.com/mmatl/pyopengl.git@76d1261adee2d3fd99b418e75b0416bb7d2865e6",
+  "pyopengl",
+]
+gello = [
+  "gello",
+  "dynamixel_sdk",
 ]
 real-ur5e = [
+  "gello",
+  "dynamixel_sdk",
   "ur_rtde",
   "pyrealsense2",
   "hid",
 ]
 real-xarm7 = [
+  "gello",
+  "dynamixel_sdk",
   "xArm-Python-SDK",
   "pyrealsense2",
   "hid",
@@ -128,3 +151,78 @@ benchmarks = [
 
 [tool.setuptools.packages.find]
 include = ["robo_manip_baselines", "robo_manip_baselines.*"]
+
+[dependency-groups]
+dev = [
+  "pre-commit",
+]
+
+# This project is managed with uv (https://docs.astral.sh/uv/).
+# Base install:        `uv sync`
+# Add a policy/env:    `uv sync --extra <name>` (e.g. `uv sync --extra act`)
+# All third-party editable installs are resolved declaratively via the
+# [tool.uv.sources] entries below — `uv pip install` is not required.
+# Note: clone the repo with `--recursive` (or run
+# `git submodule update --init --recursive`) so the third_party/ paths exist
+# before running `uv sync`.
+
+[tool.uv]
+# Force uv-managed Python (downloaded into ~/.local/share/uv/python). The
+# managed builds ship Python.h, which is required to compile sdist-only
+# packages such as `evdev` (a transitive dep of `pynput`). On systems where
+# the distro Python has no `-dev` headers, "managed" would still fall back to
+# the system interpreter and break the evdev build — so use "only-managed".
+python-preference = "only-managed"
+
+# `act` vs `mt-act` ship different `detr` packages; the 3D policy extras
+# each ship a different `pytorch3d`. Declare them as conflicting so uv
+# resolves a separate environment for each combination.
+conflicts = [
+  [
+    { extra = "act" },
+    { extra = "mt-act" },
+  ],
+  [
+    { extra = "diffusion-policy-3d" },
+    { extra = "flow-policy" },
+    { extra = "maniflow-policy" },
+  ],
+]
+
+[tool.uv.sources]
+# Editable installs sourced from the git submodules under third_party/.
+eipl = { path = "third_party/eipl", editable = true }
+detr = [
+  { path = "third_party/act/detr", editable = true, extra = "act" },
+  { path = "third_party/roboagent/detr", editable = true, extra = "mt-act" },
+]
+diffusion_policy = { path = "third_party/diffusion_policy", editable = true }
+diffusion_policy_3d = { path = "third_party/3D-Diffusion-Policy/3D-Diffusion-Policy", editable = true }
+flow_policy_3d = { path = "third_party/FlowPolicy/FlowPolicy", editable = true }
+maniflow = { path = "third_party/ManiFlow_Policy/ManiFlow", editable = true }
+pytorch3d = [
+  { path = "third_party/3D-Diffusion-Policy/third_party/pytorch3d_simplified", editable = true, extra = "diffusion-policy-3d" },
+  { path = "third_party/FlowPolicy/third_party/pytorch3d_simplified", editable = true, extra = "flow-policy" },
+  { path = "third_party/ManiFlow_Policy/third_party/pytorch3d", editable = true, extra = "maniflow-policy" },
+]
+r3m = { path = "third_party/ManiFlow_Policy/third_party/r3m", editable = true }
+tacto = { path = "third_party/tacto", editable = true }
+attrdict = { path = "third_party/tacto/third_party/attrdict", editable = true }
+urdfpy = { path = "third_party/tacto/third_party/urdfpy", editable = true }
+pybulletX = { path = "third_party/tacto/third_party/pybulletX", editable = true }
+gello = { path = "third_party/gello_software", editable = true }
+dynamixel_sdk = { path = "third_party/gello_software/third_party/DynamixelSDK/python", editable = true }
+# pyopengl is fetched from a forked git commit (see doc/install.md history).
+pyopengl = { git = "https://github.com/mmatl/pyopengl.git", rev = "76d1261adee2d3fd99b418e75b0416bb7d2865e6" }
+
+# Several third_party packages import `torch` from their setup.py to detect
+# CUDA / build C++ extensions. uv's build isolation hides torch by default,
+# so declare it as an extra build-time dependency for those packages.
+[tool.uv.extra-build-dependencies]
+pytorch3d = ["torch"]
+diffusion_policy_3d = ["torch"]
+flow_policy_3d = ["torch"]
+maniflow = ["torch"]
+r3m = ["torch"]
+detr = ["torch"]
+eipl = ["torch"]

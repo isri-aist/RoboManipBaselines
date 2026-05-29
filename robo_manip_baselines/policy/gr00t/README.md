@@ -74,7 +74,7 @@ Convert RMB dataset into the LeRobot dataset format.
 # Use Env 1
 # Go to the top directory of this repository
 $ cd robo_manip_baselines
-$ python misc/ConvertRmbDataToLerobot.py <rmb_dataset_dir> --output_dir <lerobot_dataset_dir>
+$ uv run python misc/ConvertRmbDataToLerobot.py <rmb_dataset_dir> --output_dir <lerobot_dataset_dir>
 ```
 
 ## LeRobot Data Conversion
@@ -85,7 +85,7 @@ Convert from LeRobot v3 to v2.
 # Use Env 2
 # Go to Isaac-GR00T directory
 $ cd scripts/lerobot_conversion
-$ python convert_v3_to_v2.py --root <dataset_root> --repo-id <dataset_repo_id>
+$ uv run python convert_v3_to_v2.py --root <dataset_root> --repo-id <dataset_repo_id>
 $ cp <lerobot_dataset_dir>_v3.0/meta/modality.json <lerobot_dataset_dir>/meta
 ```
 
@@ -103,7 +103,7 @@ Here is an example command for UR5e.
 # Use Env 3
 # Go to Isaac-GR00T directory
 $ export NUM_GPUS=1
-$ CUDA_VISIBLE_DEVICES=0 python gr00t/experiment/launch_finetune.py \
+$ CUDA_VISIBLE_DEVICES=0 uv run python gr00t/experiment/launch_finetune.py \
   --dataset-path <lerobot_dataset_dir> \
   --output-dir <checkpoint_dir> \
   --base-model-path nvidia/GR00T-N1.6-3B \
@@ -133,7 +133,7 @@ Run a trained policy in the simulator.
 # Use Env 4
 # Go to the top directory of this repository
 $ cd robo_manip_baselines
-$ python ./bin/Rollout.py Gr00t <task_name> --checkpoint <checkpoint_dir> --world_idx 0 --no_plot --task_desc <task_description_text>
+$ uv run python ./bin/Rollout.py Gr00t <task_name> --checkpoint <checkpoint_dir> --world_idx 0 --no_plot --task_desc <task_description_text>
 ```
 
 > [!NOTE]

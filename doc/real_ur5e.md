@@ -16,12 +16,12 @@ Edit this file as follows:
 ```console
 # Go to the top directory of this repository
 $ cd robo_manip_baselines
-$ python ./bin/Teleop.py RealUR5eDemo --config ./envs/configs/RealUR5eDemoEnv.yaml
+$ uv run python ./bin/Teleop.py RealUR5eDemo --config ./envs/configs/RealUR5eDemoEnv.yaml
 ```
 
 ## Policy rollout
 ```console
 # Go to the top directory of this repository
 $ cd robo_manip_baselines
-$ python ./bin/Rollout.py Act RealUR5eDemo --config ./envs/configs/RealUR5eDemoEnv.yaml --checkpoint <checkpoint_path> --wait_before_start
+$ uv run python ./bin/Rollout.py Act RealUR5eDemo --config ./envs/configs/RealUR5eDemoEnv.yaml --checkpoint <checkpoint_path> --wait_before_start
 ```

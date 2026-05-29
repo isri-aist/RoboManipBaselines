@@ -28,13 +28,13 @@ As an example, uncomment the following line in [env_ur5e_pick.xml](../robo_manip
 
 Once enabled, you can launch teleoperation as usual and the tactile sensors will be activated:
 ```console
-$ python ./bin/Teleop.py MujocoUR5ePick
+$ uv run python ./bin/Teleop.py MujocoUR5ePick
 ```
 The measurements from each tactile sensor are automatically stored in the RMB data using the sensor name as the data key.
 
 To visualize the tactile measurements, enable the `--plot_tactile` option:
 ```console
-$ python ./bin/Teleop.py MujocoUR5ePick --plot_tactile
+$ uv run python ./bin/Teleop.py MujocoUR5ePick --plot_tactile
 ```
 
 https://github.com/user-attachments/assets/2c2719da-db1e-42b8-bc2d-4efc207813be
