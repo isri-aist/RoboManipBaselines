@@ -7,7 +7,7 @@ import torch
 sys.path.append(os.path.join(os.path.dirname(__file__), "../../../third_party/lerobot"))
 from lerobot.policies.factory import make_pre_post_processors
 from lerobot.policies.pi0.modeling_pi0 import PI0Policy
-from lerobot.utils.control_utils import predict_action
+from lerobot.common.control_utils import predict_action
 
 from robo_manip_baselines.common import RolloutBase
 from robo_manip_baselines.common.data.DataKey import DataKey

@@ -167,6 +167,11 @@ class MujocoEnvBase(EnvDataMixin, MujocoEnv, ABC):
     def close(self):
         for camera in self.cameras.values():
             camera["viewer"].close()
+        # Remove the dummy entry added in setup_camera() (used only to trigger
+        # context switching in render()). gymnasium >= 1.1 MujocoRenderer.close()
+        # calls .close() on every _viewers entry without a None check, so the
+        # dummy None would raise AttributeError otherwise.
+        self.mujoco_renderer._viewers.pop("dummy", None)
         MujocoEnv.close(self)
 
     def get_joint_pos_from_obs(self, obs):

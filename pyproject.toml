@@ -30,7 +30,7 @@ dependencies = [
   "ffmpeg-python",
   "imageio>=2.14.1",
   "videoio==0.3.0",
-  "gymnasium==1.0.0",
+  "gymnasium>=1.1.1,<2.0.0",
   "mujoco==3.1.6",
   "pin",
   "pyspacemouse==1.1.4",
@@ -110,6 +110,15 @@ maniflow-policy = [
   "timm",
   "huggingface_hub<=0.25.0",
 ]
+pi0 = [
+  # lerobot (main / >=0.5.2) requires Python >=3.12, but the rest of the project
+  # supports >=3.10. Gate the extra to 3.12 so the universal lock still resolves
+  # on 3.10/3.11 (pi0 is only usable on 3.12 anyway).
+  # lerobot 0.5.2 modularised deps into extras: `pi` = pi0 policy (transformers,
+  # scipy); `training` = `dataset` (datasets/pandas/pyarrow/av/torchcodec) +
+  # accelerate + wandb, needed by lerobot-train and dataset loading.
+  "lerobot[pi,training] ; python_version >= '3.12'",
+]
 tacto = [
   "tacto",
   "attrdict",
@@ -174,6 +183,23 @@ dev = [
 # the system interpreter and break the evdev build — so use "only-managed".
 python-preference = "only-managed"
 
+# Restrict the universal lock to x86_64 Linux (the dev/CI/runtime platform).
+# Two upgrade-induced conflicts make a fully universal lock impossible:
+#   - aarch64 Linux: lerobot's `dataset` extra needs torchcodec>=0.11 (→ torch
+#     2.11), conflicting with the pinned torchcodec==0.10.0 / torch 2.10.
+#   - arm64 macOS: real-ur5e's pyrealsense2 has no compatible wheels.
+# Broaden this list if those platforms are ever targeted.
+environments = [
+  "sys_platform == 'linux' and platform_machine == 'x86_64'",
+]
+
+# lerobot pulls in `opencv-python-headless`, which collides with RMB's GUI
+# `opencv-python` on the shared `cv2` module and breaks GUI windows (teleop,
+# visualization). Drop the headless variant everywhere via an always-false
+# marker so a single GUI-capable `opencv-python` provides `cv2` for both RMB
+# and lerobot (GUI opencv is a superset, so lerobot works with it too).
+override-dependencies = ["opencv-python-headless ; sys_platform == 'no-such-platform'"]
+
 # `act` vs `mt-act` ship different `detr` packages; the 3D policy extras
 # each ship a different `pytorch3d`. Declare them as conflicting so uv
 # resolves a separate environment for each combination.
@@ -186,6 +212,11 @@ conflicts = [
     { extra = "diffusion-policy-3d" },
     { extra = "flow-policy" },
     { extra = "maniflow-policy" },
+    { extra = "pi0" },
+  ],
+  [
+    { extra = "pi0" },
+    { extra = "diffusion-policy" },
   ],
 ]
 
@@ -200,6 +231,7 @@ diffusion_policy = { path = "third_party/diffusion_policy", editable = true }
 diffusion_policy_3d = { path = "third_party/3D-Diffusion-Policy/3D-Diffusion-Policy", editable = true }
 flow_policy_3d = { path = "third_party/FlowPolicy/FlowPolicy", editable = true }
 maniflow = { path = "third_party/ManiFlow_Policy/ManiFlow", editable = true }
+lerobot = { path = "third_party/lerobot", editable = true }
 pytorch3d = [
   { path = "third_party/3D-Diffusion-Policy/third_party/pytorch3d_simplified", editable = true, extra = "diffusion-policy-3d" },
   { path = "third_party/FlowPolicy/third_party/pytorch3d_simplified", editable = true, extra = "flow-policy" },
