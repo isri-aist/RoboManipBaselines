@@ -21,6 +21,7 @@ class RolloutMain:
         "ManiFlowPolicy",
         "Gr00t",
         "Pi0",
+        "AsyncVla",
     ]
 
     def __init__(self):

@@ -14,6 +14,7 @@ class TrainMain:
         "DiffusionPolicy3d",
         "FlowPolicy",
         "ManiFlowPolicy",
+        "AsyncVla",
     ]
 
     def __init__(self):
