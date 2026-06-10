@@ -1,7 +1,7 @@
 import torch
 from tqdm import tqdm
 
-from robo_manip_baselines.common import TrainBase
+from robo_manip_baselines.common import RmbData, TrainBase, find_rmb_files
 
 from .AsyncVlaDataset import AsyncVlaDataset
 from .AsyncVlaPolicy import AsyncVlaPolicy
@@ -34,29 +34,40 @@ class TrainAsyncVla(TrainBase):
             help="number of steps in the action chunk (should match the base VLA)",
         )
         parser.add_argument(
-            "--state_feature_dim",
+            "--d_model",
             type=int,
-            default=128,
-            help="dimension of state feature",
+            default=512,
+            help="transformer token / model dimension (official obs_encoding_size)",
         )
         parser.add_argument(
-            "--guidance_feature_dim",
+            "--n_heads",
             type=int,
-            default=256,
-            help="dimension of base-VLA guidance feature",
+            default=8,
+            help="number of attention heads in the Edge Adapter transformer",
         )
         parser.add_argument(
-            "--delta_feature_dim",
+            "--n_layers",
             type=int,
-            default=128,
-            help="dimension of delta-image feature",
+            default=4,
+            help="number of transformer encoder layers in the Edge Adapter",
         )
         parser.add_argument(
-            "--hidden_dim_list",
+            "--ff_dim_factor",
             type=int,
-            nargs="+",
-            default=[512, 512],
-            help="dimension list of hidden layers",
+            default=4,
+            help="feed-forward expansion factor in the transformer",
+        )
+        parser.add_argument(
+            "--dropout",
+            type=float,
+            default=0.1,
+            help="dropout in the Edge Adapter transformer encoder",
+        )
+        parser.add_argument(
+            "--image_size",
+            type=int,
+            default=96,
+            help="image size fed to the EfficientNet encoders (official 96)",
         )
 
         parser.add_argument(
@@ -124,14 +135,69 @@ class TrainAsyncVla(TrainBase):
         self.model_meta_info["data"]["guidance_key"] = self.args.guidance_key
         self.model_meta_info["train"]["smooth_weight"] = self.args.smooth_weight
 
+        # Read the pi0 guidance embedding dims from the cached data so the Edge
+        # Adapter transformer can be sized before the policy is constructed.
+        guidance_key = self.args.guidance_key
+        rmb_files = find_rmb_files(self.args.dataset_dir)
+        if len(rmb_files) == 0:
+            raise ValueError(
+                f"[{self.__class__.__name__}] No RMB files found in "
+                f"{self.args.dataset_dir}."
+            )
+        with RmbData(rmb_files[0]) as rmb_data:
+            if guidance_key not in rmb_data.keys():
+                raise ValueError(
+                    f"[{self.__class__.__name__}] Cached guidance '{guidance_key}' not "
+                    f"found in {rmb_files[0]}. Run misc/AddPi0GuidanceToRmbData.py first."
+                )
+            # Reject stale caches from the pre-port action-chunk implementation. That
+            # stored a (T, n_action_steps, action_dim) action chunk under the SAME
+            # default key; it has the same ndim as the new (T, n_guidance_tokens,
+            # embed_dim) hidden-state guidance, so without this check it would silently
+            # size the Edge Adapter to e.g. (8, 7). Training would then finish but
+            # rollout would reject the checkpoint against the live pi0 chunk_size /
+            # expert_width. The faithful-port cache (AddPi0GuidanceToRmbData) writes
+            # these metadata attrs alongside the data, so require them and fail fast.
+            tokens_attr = guidance_key + "_n_guidance_tokens"
+            embed_attr = guidance_key + "_embed_dim"
+            if tokens_attr not in rmb_data.attrs or embed_attr not in rmb_data.attrs:
+                raise ValueError(
+                    f"[{self.__class__.__name__}] Cached guidance '{guidance_key}' in "
+                    f"{rmb_files[0]} is missing the '{tokens_attr}' / '{embed_attr}' "
+                    "attributes written by the hidden-state guidance cache. It was "
+                    "likely produced by an older action-chunk implementation. Re-run "
+                    "misc/AddPi0GuidanceToRmbData.py with --overwrite to regenerate it."
+                )
+            # (T, n_guidance_tokens, embed_dim)
+            guidance_shape = rmb_data[guidance_key].shape
+            attr_tokens = int(rmb_data.attrs[tokens_attr])
+            attr_embed = int(rmb_data.attrs[embed_attr])
+            if (
+                len(guidance_shape) != 3
+                or int(guidance_shape[1]) != attr_tokens
+                or int(guidance_shape[2]) != attr_embed
+            ):
+                raise ValueError(
+                    f"[{self.__class__.__name__}] Cached guidance '{guidance_key}' shape "
+                    f"{tuple(guidance_shape)} is inconsistent with its metadata "
+                    f"(n_guidance_tokens={attr_tokens}, embed_dim={attr_embed}) in "
+                    f"{rmb_files[0]}. Re-run misc/AddPi0GuidanceToRmbData.py --overwrite."
+                )
+        self.model_meta_info["data"]["n_guidance_tokens"] = int(guidance_shape[1])
+        self.model_meta_info["data"]["guidance_embed_dim"] = int(guidance_shape[2])
+
     def setup_policy(self):
-        # Set policy args
+        # Set policy args (faithful transformer Edge Adapter)
         self.model_meta_info["policy"]["args"] = {
             "n_action_steps": self.args.n_action_steps,
-            "state_feature_dim": self.args.state_feature_dim,
-            "guidance_feature_dim": self.args.guidance_feature_dim,
-            "delta_feature_dim": self.args.delta_feature_dim,
-            "hidden_dim_list": self.args.hidden_dim_list,
+            "guidance_embed_dim": self.model_meta_info["data"]["guidance_embed_dim"],
+            "n_guidance_tokens": self.model_meta_info["data"]["n_guidance_tokens"],
+            "d_model": self.args.d_model,
+            "n_heads": self.args.n_heads,
+            "n_layers": self.args.n_layers,
+            "ff_dim_factor": self.args.ff_dim_factor,
+            "dropout": self.args.dropout,
+            "image_size": self.args.image_size,
         }
 
         # Construct policy

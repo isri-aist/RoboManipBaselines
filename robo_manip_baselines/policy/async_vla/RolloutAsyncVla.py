@@ -17,6 +17,18 @@ from robo_manip_baselines.common import (
 from .AsyncVlaPolicy import AsyncVlaPolicy
 
 
+class _Pi0GuidanceHook:
+    """forward_pre_hook on pi0's ``action_out_proj`` that captures ``suffix_out``
+    (the action-expert hidden states, ``(B, chunk_size, expert_width)``) on every
+    denoise step; the last capture is the final denoise step used as guidance."""
+
+    def __init__(self):
+        self.captured = None
+
+    def __call__(self, module, args):
+        self.captured = args[0].detach()
+
+
 class RolloutAsyncVla(RolloutBase):
     """Rollout of AsyncVLA with a threaded asynchronous base VLA (pi0).
 
@@ -110,6 +122,17 @@ class RolloutAsyncVla(RolloutBase):
         self.base_infer_count = 0
         self.staleness_list = []
 
+        # Base-VLA worker health. The worker is the sole pi0 caller; if it crashes,
+        # infer_policy would otherwise hold position forever and the run would be
+        # misrecorded as a policy failure. Capture the worker exception and the
+        # consecutive hold count so the control loop can fail loudly / warn instead.
+        self.worker_exc = None
+        self._hold_steps = 0
+        # Diagnostic only (does NOT change the command): warn once per episode if no
+        # guidance has arrived after this many consecutive hold steps. Normal warm-up
+        # is a few steps, so a large count means the base VLA is stuck or far too slow.
+        self._hold_warn_steps = 100
+
     def setup_base_vla(self):
         # Import lerobot lazily (see class docstring)
         sys.path.append(
@@ -127,6 +150,28 @@ class RolloutAsyncVla(RolloutBase):
             preprocessor_overrides={"device_processor": {"device": str(self.device)}},
         )
         self.base_policy.eval()
+
+        # Register the hidden-state guidance hook (faithful AsyncVLA guidance =
+        # pi0 action-expert hidden states, captured at the final denoise step).
+        self.guidance_hook = _Pi0GuidanceHook()
+        self.base_policy.model.action_out_proj.register_forward_pre_hook(
+            self.guidance_hook
+        )
+        self.guidance_embed_dim = self.base_policy.model.action_out_proj.in_features
+        self.n_guidance_tokens = self.base_policy.config.chunk_size
+        meta_n_guid = self.model_meta_info["data"].get("n_guidance_tokens")
+        meta_embed = self.model_meta_info["data"].get("guidance_embed_dim")
+        if meta_n_guid is not None and meta_n_guid != self.n_guidance_tokens:
+            raise ValueError(
+                f"[{self.__class__.__name__}] Base VLA chunk_size "
+                f"{self.n_guidance_tokens} != trained n_guidance_tokens {meta_n_guid}. "
+                "The rollout base VLA must match the one used for guidance caching."
+            )
+        if meta_embed is not None and meta_embed != self.guidance_embed_dim:
+            raise ValueError(
+                f"[{self.__class__.__name__}] Base VLA expert width "
+                f"{self.guidance_embed_dim} != trained guidance_embed_dim {meta_embed}."
+            )
 
         # Cameras expected by pi0 (must align with the Edge Adapter cameras)
         self.base_camera_names = [
@@ -170,6 +215,7 @@ class RolloutAsyncVla(RolloutBase):
             with self.obs_lock:
                 self.latest_obs_snapshot = None
             self.image_ring.clear()
+            self._hold_steps = 0
 
     def run(self):
         try:
@@ -197,12 +243,14 @@ class RolloutAsyncVla(RolloutBase):
         }
 
     # ---- base VLA inference (single integration point) ----
-    def predict_base_chunk(self, state_array, images_dict):
+    def predict_base_guidance(self, state_array, images_dict):
         # Mirror lerobot's predict_action pipeline: prepare_observation_for_inference
         # converts the raw HWC uint8 images to CHW float[0,1] tensors, adds the batch
-        # dimension, moves to the device and attaches the task BEFORE the preprocessor
-        # (the pi0 preprocessor does not perform these image conversions). We then
-        # call predict_action_chunk (instead of select_action) for the full chunk.
+        # dimension, moves to the device and attaches the task BEFORE the preprocessor.
+        # We run predict_action_chunk only to drive flow-matching denoising; the
+        # predicted actions are ignored. The faithful AsyncVLA guidance is pi0's
+        # action-expert hidden states (suffix_out), captured by the forward_pre_hook
+        # on action_out_proj at the final denoise step.
         observation = {"observation.state": state_array}
         for camera_name in self.base_camera_names:
             observation[f"observation.images.{camera_name}_rgb"] = images_dict[
@@ -215,18 +263,27 @@ class RolloutAsyncVla(RolloutBase):
             if (self.device.type == "cuda" and use_amp)
             else nullcontext()
         )
+        self.guidance_hook.captured = None
         with autocast_ctx:
             observation = self.prepare_observation_for_inference(
                 observation, self.device, self.args.task_desc
             )
             batch = self.base_preprocess(observation)
-            actions = self.base_policy.predict_action_chunk(batch)
-            actions = self.base_postprocess(actions)
-        actions = actions[0, : self.n_action_steps]
-        return np.asarray(actions.detach().to("cpu"), dtype=np.float64)
+            self.base_policy.predict_action_chunk(batch)
+        captured = self.guidance_hook.captured
+        if captured is None:
+            raise RuntimeError(
+                f"[{self.__class__.__name__}] pi0 guidance hook captured nothing; "
+                "action_out_proj was not called during predict_action_chunk."
+            )
+        # (B, chunk_size, expert_width) at the final denoise step -> (chunk_size, width).
+        # Keep it float32: the Edge Adapter consumes the guidance as a float32 tensor, so
+        # a float64 round-trip would only add a CPU copy and double the guidance bandwidth
+        # handed from the worker thread to the control loop.
+        return captured[0].to(torch.float32).cpu().numpy()
 
     def compute_guidance(self, snapshot):
-        chunk = self.predict_base_chunk(snapshot["state"], snapshot["images"])
+        chunk = self.predict_base_guidance(snapshot["state"], snapshot["images"])
         with self.guidance_lock:
             self.latest_guidance = {
                 "chunk": chunk,
@@ -237,22 +294,48 @@ class RolloutAsyncVla(RolloutBase):
 
     def base_vla_worker(self):
         last_key = None
-        while not self.worker_stop.is_set():
-            with self.obs_lock:
-                snapshot = self.latest_obs_snapshot
-            if snapshot is None:
-                self.worker_stop.wait(0.001)
-                continue
-            # Skip recomputation when the observation has not advanced, so the base
-            # VLA is not re-run on an identical snapshot (which would saturate the
-            # GPU, starve the control loop, and inflate base_infer_count).
-            key = (snapshot["gen"], snapshot["stamp"])
-            if key == last_key:
-                self.worker_stop.wait(0.001)
-                continue
-            last_key = key
-            with torch.inference_mode():
-                self.compute_guidance(snapshot)
+        try:
+            while not self.worker_stop.is_set():
+                with self.obs_lock:
+                    snapshot = self.latest_obs_snapshot
+                if snapshot is None:
+                    self.worker_stop.wait(0.001)
+                    continue
+                # Skip recomputation when the observation has not advanced, so the base
+                # VLA is not re-run on an identical snapshot (which would saturate the
+                # GPU, starve the control loop, and inflate base_infer_count).
+                key = (snapshot["gen"], snapshot["stamp"])
+                if key == last_key:
+                    self.worker_stop.wait(0.001)
+                    continue
+                last_key = key
+                with torch.inference_mode():
+                    self.compute_guidance(snapshot)
+        except Exception as exc:
+            # The worker is a daemon thread, so an uncaught exception would die
+            # silently and leave the control loop holding position forever. Stash it
+            # and stop; _check_base_worker_alive() re-raises it on the main thread.
+            self.worker_exc = exc
+
+    def _check_base_worker_alive(self):
+        # Surface a dead/crashed base-VLA worker on the main thread instead of holding
+        # position for the whole episode (which would be misrecorded as a policy
+        # failure rather than the pi0 infrastructure failure it actually is).
+        if self.worker_exc is not None:
+            raise RuntimeError(
+                f"[{self.__class__.__name__}] The base VLA worker thread crashed; no "
+                "guidance can be produced (see the chained exception)."
+            ) from self.worker_exc
+        if (
+            self.worker_started
+            and not self.worker_stop.is_set()
+            and self.worker_thread is not None
+            and not self.worker_thread.is_alive()
+        ):
+            raise RuntimeError(
+                f"[{self.__class__.__name__}] The base VLA worker thread exited "
+                "unexpectedly; no guidance will ever arrive."
+            )
 
     # ---- async bookkeeping ----
     def publish_snapshot(self, state_array, images_dict, stamp):
@@ -300,20 +383,38 @@ class RolloutAsyncVla(RolloutBase):
             self.worker_thread.start()
             self.worker_started = True
 
+        # Fail loudly if the sole pi0 caller has died, rather than holding forever.
+        self._check_base_worker_alive()
+
         # Read the latest (stale) guidance, discarding any left over from a previous
         # episode (the worker persists across resets and may publish late).
         with self.guidance_lock:
             guidance = self.latest_guidance
         if guidance is None or guidance["gen"] != self.episode_generation:
-            # Hold-position fallback (before the first fresh guidance of an episode)
-            guidance_chunk = np.repeat(
-                state_array[np.newaxis], self.n_action_steps, axis=0
+            # No fresh base-VLA guidance yet (episode start / slow pi0 warm-up). The
+            # Edge Adapter is trained ONLY on real (delayed) pi0 embeddings -- even the
+            # smallest injected delay still indexes a real cached embedding, never a
+            # zero one -- so feeding a zero embedding here is out-of-distribution and
+            # can produce a lurching initial command. Hold the current joint position
+            # until the worker publishes the first guidance of this episode (state_dim
+            # == action_dim is enforced in setup_policy precisely for this fallback).
+            self._hold_steps += 1
+            if self._hold_steps == self._hold_warn_steps:
+                print(
+                    f"[{self.__class__.__name__}] WARNING: still no base-VLA guidance "
+                    f"after {self._hold_steps} control steps; the base VLA may be far "
+                    "too slow or stuck. Holding the current joint position meanwhile."
+                )
+            self.policy_action = state_array.copy()
+            self.policy_action_list = np.concatenate(
+                [self.policy_action_list, self.policy_action[np.newaxis]]
             )
-            delayed_stamp = stamp
-        else:
-            guidance_chunk = guidance["chunk"]
-            delayed_stamp = guidance["stamp"]
-            self.staleness_list.append(stamp - delayed_stamp)
+            return
+
+        self._hold_steps = 0
+        guidance_chunk = guidance["chunk"]
+        delayed_stamp = guidance["stamp"]
+        self.staleness_list.append(stamp - delayed_stamp)
 
         # Retrieve I_{t-k} matching the guidance's observation timestamp
         delayed_images_dict = self.lookup_delayed_images(delayed_stamp)
@@ -359,11 +460,10 @@ class RolloutAsyncVla(RolloutBase):
             torch.newaxis
         ].to(self.device)
 
-        # Guidance (shares the action normalization stats)
-        guidance = normalize_data(guidance_chunk, self.model_meta_info["action"])
-        guidance_tensor = torch.tensor(guidance[np.newaxis], dtype=torch.float32).to(
-            self.device
-        )
+        # Guidance: raw pi0 hidden-state embeddings (no action normalization)
+        guidance_tensor = torch.tensor(
+            guidance_chunk[np.newaxis], dtype=torch.float32
+        ).to(self.device)
 
         action_seq = self.policy(
             state_tensor, images_tensor, delta_tensor, guidance_tensor

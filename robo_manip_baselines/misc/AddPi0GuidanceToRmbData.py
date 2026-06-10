@@ -43,7 +43,8 @@ def parse_argument():
         "--n_action_steps",
         type=int,
         default=8,
-        help="length of the guidance action chunk",
+        help="(metadata only) Edge Adapter output chunk length; the cached guidance "
+        "always spans pi0's full chunk_size action tokens",
     )
     parser.add_argument(
         "--guidance_key",
@@ -66,13 +67,37 @@ def parse_argument():
     return parser.parse_args()
 
 
-class AddPi0GuidanceToRmbData:
-    """Precompute and cache the frozen-pi0 guidance action chunk per timestep.
+class _Pi0GuidanceHook:
+    """forward_pre_hook on pi0's ``action_out_proj``.
 
-    This is the offline preprocessing step for training the AsyncVLA Edge
-    Adapter (``policy/async_vla``). For every timestep of every episode it runs
-    the frozen base VLA (pi0) and stores the predicted action chunk (in raw
-    joint-position space) so that the Edge Adapter training can inject arbitrary
+    During flow-matching denoising, ``denoise_step`` computes
+    ``suffix_out = outputs_embeds[1][:, -chunk_size:].to(float32)`` (the action-expert
+    hidden states, shape ``(B, chunk_size, expert_width)``) and feeds it to
+    ``action_out_proj`` to predict the velocity. This pre-hook captures that
+    ``suffix_out`` input on every denoise step; the last capture corresponds to the
+    final denoise step, which is what AsyncVLA uses as the base-VLA "guidance" token
+    sequence (NOT the predicted action chunk).
+    """
+
+    def __init__(self):
+        self.captured = None
+
+    def __call__(self, module, args):
+        # args[0] == suffix_out, shape (B, chunk_size, expert_width)
+        self.captured = args[0].detach()
+
+
+class AddPi0GuidanceToRmbData:
+    """Precompute and cache the frozen-pi0 *hidden-state* guidance per timestep.
+
+    Faithful AsyncVLA port: the base-VLA guidance is the action-expert hidden states
+    (``suffix_out``, the input to ``action_out_proj``) at the final denoise step, of
+    shape ``(chunk_size, expert_width)`` (e.g. ``(16, 1024)`` for pi0 with a
+    gemma_300m action expert), NOT the predicted action chunk. The Edge Adapter
+    (``policy/async_vla``) consumes these embeddings as guidance tokens.
+
+    For every timestep of every episode it runs the frozen base VLA (pi0) and stores
+    the captured hidden states so that the Edge Adapter training can inject arbitrary
     delays by indexing into the cache.
     """
 
@@ -108,19 +133,29 @@ class AddPi0GuidanceToRmbData:
 
         self.prepare_observation_for_inference = prepare_observation_for_inference
         self.policy = PI0Policy.from_pretrained(self.base_checkpoint)
-        self.preprocess, self.postprocess = make_pre_post_processors(
+        self.preprocess, _ = make_pre_post_processors(
             self.policy.config,
             self.base_checkpoint,
             preprocessor_overrides={"device_processor": {"device": str(self.device)}},
         )
         self.policy.eval()
 
-    def predict_chunk(self, state_array, images_dict):
+        # Register the hidden-state capture hook on pi0's action_out_proj.
+        self.guidance_hook = _Pi0GuidanceHook()
+        self.policy.model.action_out_proj.register_forward_pre_hook(self.guidance_hook)
+        self.expert_width = self.policy.model.action_out_proj.in_features
+        self.chunk_size = self.policy.config.chunk_size
+        print(
+            f"[{self.__class__.__name__}] pi0 guidance = action-expert hidden states "
+            f"(chunk_size={self.chunk_size}, expert_width={self.expert_width})"
+        )
+
+    def capture_guidance(self, state_array, images_dict):
         # Mirror lerobot's predict_action pipeline: prepare_observation_for_inference
-        # converts the raw HWC uint8 images to CHW float[0,1] tensors, adds the batch
-        # dimension, moves to the device and attaches the task BEFORE the preprocessor
-        # (the pi0 preprocessor does not perform these image conversions). We then
-        # call predict_action_chunk (instead of select_action) for the full chunk.
+        # converts raw HWC uint8 images to CHW float[0,1] tensors, adds the batch
+        # dimension, moves to the device and attaches the task BEFORE the preprocessor.
+        # We run predict_action_chunk only to trigger denoising; the action output is
+        # ignored and the guidance is the suffix_out captured by the hook (final step).
         observation = {"observation.state": state_array}
         for camera_name in self.camera_names:
             observation[f"observation.images.{camera_name}_rgb"] = images_dict[
@@ -133,20 +168,30 @@ class AddPi0GuidanceToRmbData:
             if (self.device.type == "cuda" and use_amp)
             else nullcontext()
         )
+        self.guidance_hook.captured = None
         with autocast_ctx:
             observation = self.prepare_observation_for_inference(
                 observation, self.device, self.task_desc
             )
             batch = self.preprocess(observation)
-            actions = self.policy.predict_action_chunk(batch)
-            actions = self.postprocess(actions)
-        actions = actions[0, : self.n_action_steps]
-        return np.asarray(actions.detach().to("cpu"), dtype=np.float64)
+            self.policy.predict_action_chunk(batch)
+
+        captured = self.guidance_hook.captured
+        if captured is None:
+            raise RuntimeError(
+                f"[{self.__class__.__name__}] pi0 guidance hook captured nothing; "
+                "action_out_proj was not called during predict_action_chunk."
+            )
+        # (B, chunk_size, expert_width) at the final denoise step -> (chunk_size, width).
+        # Stored as float32: half the size/IO of float64 with ample precision for the
+        # Edge Adapter (which consumes the guidance as a float32 tensor anyway).
+        guidance = captured[0].to(torch.float32).cpu().numpy()
+        return guidance
 
     def run(self):
         print(
-            f"[{self.__class__.__name__}] Add base VLA guidance '{self.guidance_key}' "
-            "generated by the frozen pi0 policy."
+            f"[{self.__class__.__name__}] Add base VLA hidden-state guidance "
+            f"'{self.guidance_key}' generated by the frozen pi0 policy."
         )
         rmb_path_list = find_rmb_files(self.path)
         for rmb_path in tqdm(rmb_path_list):
@@ -164,6 +209,10 @@ class AddPi0GuidanceToRmbData:
                 guidance_seq = self.get_guidance_seq(rmb_data)
 
                 rmb_data.h5file[self.guidance_key] = guidance_seq
+                rmb_data.attrs[self.guidance_key + "_n_guidance_tokens"] = (
+                    guidance_seq.shape[1]
+                )
+                rmb_data.attrs[self.guidance_key + "_embed_dim"] = guidance_seq.shape[2]
                 rmb_data.attrs[self.guidance_key + "_n_action_steps"] = (
                     self.n_action_steps
                 )
@@ -191,10 +240,11 @@ class AddPi0GuidanceToRmbData:
                 for camera_name in self.camera_names
             }
             with torch.inference_mode():
-                chunk = self.predict_chunk(state_array, images_dict)
-            guidance_seq.append(chunk)
+                guidance = self.capture_guidance(state_array, images_dict)
+            guidance_seq.append(guidance)
 
-        return np.asarray(guidance_seq, dtype=np.float64)
+        # (episode_len, chunk_size, expert_width), float32
+        return np.asarray(guidance_seq, dtype=np.float32)
 
 
 if __name__ == "__main__":
