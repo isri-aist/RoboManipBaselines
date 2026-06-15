@@ -101,6 +101,14 @@ class TrainAsyncVla(TrainBase):
             help="weight of the smoothness loss",
         )
         parser.add_argument(
+            "--guidance_dropout",
+            type=float,
+            default=0.15,
+            help="per-sample probability of zeroing the guidance during training; "
+            "prevents the guidance-only shortcut solution that ignores the cameras "
+            "(see AsyncVlaDataset). 0 disables.",
+        )
+        parser.add_argument(
             "--guidance_key",
             type=str,
             default="pi0_guidance",
@@ -133,6 +141,7 @@ class TrainAsyncVla(TrainBase):
         self.model_meta_info["data"]["dth"] = self.args.dth
         self.model_meta_info["data"]["reweight_gain"] = self.args.reweight_gain
         self.model_meta_info["data"]["guidance_key"] = self.args.guidance_key
+        self.model_meta_info["data"]["guidance_dropout"] = self.args.guidance_dropout
         self.model_meta_info["train"]["smooth_weight"] = self.args.smooth_weight
 
         # Read the pi0 guidance embedding dims from the cached data so the Edge

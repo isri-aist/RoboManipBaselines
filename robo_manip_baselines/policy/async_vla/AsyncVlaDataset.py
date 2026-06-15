@@ -250,6 +250,21 @@ class AsyncVlaDataset(DatasetBase):
         )
         weight = 1.0 + reweight_gain * float(reactivity > dth)
 
+        # Guidance dropout: with probability ``guidance_dropout`` feed a ZERO
+        # guidance for this sample (after the reactivity weight above, so the
+        # reweighting statistics are unaffected). The pi0 hidden states encode the
+        # base VLA's own action plan so completely that the Edge Adapter can reach
+        # the same train/val loss while ignoring the cameras entirely — a shortcut
+        # solution that is useless at rollout, where the guidance is always stale
+        # (observed: such models have ~9x lower output sensitivity to the image
+        # inputs and a ~0% rollout success rate despite a normal val loss).
+        # Randomly withholding the guidance makes the vision pathway necessary and
+        # also matches the rollout-side zero-guidance fallback before the first
+        # base-VLA inference of an episode.
+        guidance_dropout = data_meta_info.get("guidance_dropout", 0.0)
+        if guidance_dropout > 0.0 and self.get_rng().random() < guidance_dropout:
+            delayed_guidance = np.zeros_like(delayed_guidance)
+
         # Build the 6-channel delta image: concat(I_t, I_{t-k})
         images = np.moveaxis(images, -1, -3)  # (num_images, 3, H, W)
         delayed_images = np.moveaxis(delayed_images, -1, -3)
