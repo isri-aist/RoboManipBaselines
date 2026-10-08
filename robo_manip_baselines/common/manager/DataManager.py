@@ -122,7 +122,8 @@ class DataManager:
         hdf5_filename = os.path.join(filename, "main.rmb.hdf5")
         with h5py.File(hdf5_filename, "w") as h5file:
             tasks = []
-            with concurrent.futures.ProcessPoolExecutor() as executor:
+            # Threads share the frames; worker processes would get a copy of each video
+            with concurrent.futures.ThreadPoolExecutor() as executor:
                 for key in all_data_seq.keys():
                     if not isinstance(all_data_seq[key], list):
                         raise ValueError(
@@ -131,16 +132,18 @@ class DataManager:
 
                     if DataKey.is_rgb_image_key(key):
                         video_filename = os.path.join(filename, f"{key}.rmb.mp4")
-                        images = np.array(all_data_seq[key])
                         tasks.append(
-                            executor.submit(self.save_rgb_image, video_filename, images)
+                            executor.submit(
+                                self.save_rgb_image, video_filename, all_data_seq[key]
+                            )
                         )
                     elif DataKey.is_depth_image_key(key):
                         video_filename = os.path.join(filename, f"{key}.rmb.mp4")
-                        images = (1e3 * np.array(all_data_seq[key])).astype(np.uint16)
                         tasks.append(
                             executor.submit(
-                                self.save_depth_image, video_filename, images
+                                self.save_depth_image,
+                                video_filename,
+                                all_data_seq[key],
                             )
                         )
                     else:
@@ -179,7 +182,10 @@ class DataManager:
 
     @staticmethod
     def save_depth_image(video_filename, images):
-        videoio.uint16save(video_filename, images)
+        # Frame by frame, since uint16save converts the whole video at once
+        with videoio.Uint16Writer(video_filename, images[0].shape[::-1]) as writer:
+            for image in images:
+                writer.write((1e3 * image).astype(np.uint16))
 
     def load_data(self, filename, load_keys=None, skip_image=False):
         """Load data."""
