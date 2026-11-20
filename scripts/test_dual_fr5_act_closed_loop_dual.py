@@ -559,8 +559,8 @@ def main():
         ap.error('Require 1 <= --max-gripper-transitions <= 5')
     if not (15.0 <= args.max_wall_duration <= 120.0):
         ap.error('Require 15 <= --max-wall-duration <= 120 seconds')
-    if args.steps < 1 or not (1.0 <= args.hz <= 15.0) or not (0 < args.max_duration <= 15.0):
-        ap.error('Require steps>=1, 1<=hz<=15, 0<max-duration<=15s')
+    if args.steps < 1 or not (1.0 <= args.hz <= 15.0) or not (0 < args.max_duration <= 35.0):
+        ap.error('Require steps>=1, 1<=hz<=15, 0<max-duration<=35s')
     if args.device == 'cuda' and not torch.cuda.is_available():
         raise RuntimeError('CUDA unavailable (use --device cpu)')
     device = torch.device(args.device)
