@@ -541,13 +541,15 @@ def main():
     ap.add_argument('--steps', type=int, default=90)
     ap.add_argument('--hz', type=float, default=15.0,
                     help='Republish frequency for the ServoJ bridge watchdog (not ACT action rate)')
-    ap.add_argument('--action-hz', type=float, default=15.0,
-                    help='ACT action advancement rate, from ~15 Hz recorded demonstrations')
+    ap.add_argument('--action-hz', type=float, default=None,
+                    help='ACT action rate; default = recorded-hz / checkpoint data.skip')
+    ap.add_argument('--recorded-hz', type=float, default=15.0,
+                    help='Dataset sample frequency before ACT training skip (default 15 Hz)')
     ap.add_argument('--max-target-lag-deg', type=float, default=3.0,
                     help='Abort if a timed ACT target is this far from fresh measured joints')
     ap.add_argument('--max-tick-late-ms', type=float, default=150.0,
                     help='Abort if action issuance runs excessively late, without skipping actions')
-    ap.add_argument('--timing-log', default='timed_fr3_rollout.csv',
+    ap.add_argument('--timing-log', default='timed_fr3_rollout_skipaware.csv',
                     help='Save timed action/feedback diagnostics, even on failure')
     ap.add_argument('--max-duration', type=float, default=9.0)
     ap.add_argument('--allow-resume', action='store_true',
@@ -571,7 +573,9 @@ def main():
         ap.error('Require 15 <= --max-wall-duration <= 120 seconds')
     if args.steps < 1 or not (1.0 <= args.hz <= 15.0) or not (0 < args.max_duration <= 35.0):
         ap.error('Require steps>=1, 1<=hz<=15, 0<max-duration<=35s')
-    if not (1.0 <= args.action_hz <= 15.0):
+    if not (1.0 <= args.recorded_hz <= 60.0):
+        ap.error('Require 1 <= --recorded-hz <= 60')
+    if args.action_hz is not None and not (1.0 <= args.action_hz <= 15.0):
         ap.error('Require 1 <= --action-hz <= 15')
     if not (0.75 <= args.max_target_lag_deg <= 12.0):
         ap.error('Require 0.75 <= --max-target-lag-deg <= 12')
@@ -587,8 +591,24 @@ def main():
     chunk_len = int(meta['data']['chunk_size'])
     if skip < 1 or skip > chunk_len or chunk_len < 1:
         raise RuntimeError(f'Unexpected ACT skip/chunk size: {skip}/{chunk_len}')
-    # metadata skip is validated above but NOT used to skip actions here.
-    # The current rollout consumes all 25 predicted waypoints sequentially.
+    # RMB ActDataset calls get_skipped_data_seq(..., skip) when building
+    # training-action chunks. Consecutive ACT action outputs thus correspond
+    # to approximately `skip` original dataset frames, not 1 frame.
+    trained_action_hz = args.recorded_hz / skip
+    if not (1.0 <= trained_action_hz <= 15.0):
+        raise RuntimeError(
+            f'Unsupported training-derived action rate: {trained_action_hz:.3f} Hz')
+    if args.action_hz is None:
+        args.action_hz = trained_action_hz
+        print(f'[TIMING] Selected training-consistent --action-hz={args.action_hz:.3f}')
+    elif args.action_hz > trained_action_hz * 1.01:
+        raise ValueError(
+            f'--action-hz={args.action_hz:.3f} exceeds the ~{trained_action_hz:.3f} Hz '
+            f'action spacing trained with skip={skip} and recorded-hz={args.recorded_hz}. '
+            'This skip-aware comparison refuses to accelerate the learned chunk.')
+    print(f'[TIMING] recording={args.recorded_hz:.3f} Hz, training skip={skip}, '
+          f'ACT action spacing={1.0/trained_action_hz:.3f} s; '
+          f'playback={args.action_hz:.3f} Hz')
     print(f'ACT predicts {chunk_len} actions; this test uses all actions in each chunk')
     rclpy.init()
     node = Observations()
@@ -691,12 +711,12 @@ def main():
             raise RuntimeError(f'No ARM acknowledgment from both bridges: {node.statuses}')
         # ============================================================================
         # 8) TIME-PACED ACT PLAYBACK
-        # One policy action every 1/action_hz seconds (by default 15 Hz).
+        # One policy action every 1/action_hz seconds (default recorded_hz/skip).
         # Do not skip actions to catch up, and do not wait for 0.75-degree reach
         # except at an intentional gripper transition.
         # The ServoJ bridge continues streaming at its own 125-Hz limit.
         # ============================================================================
-        period = 1.0 / args.hz   # ROS target republish for bridge watchdog
+        period = 1.0 / args.hz           # ROS target republish for bridge watchdog
         action_period = 1.0 / args.action_hz
         REACH_TOL_DEG = 0.75             # Gripper transitions only (safe settle gate)
         MAX_POLICY_DELTA_DEG = 12.0      # Retain existing independent action guard
@@ -727,7 +747,7 @@ def main():
                 if age > 0.30:
                     raise RuntimeError(f'{a} joint feedback stale: {age:.3f}s')
 
-        # Bridge startup may take longer than one 15-Hz tick. Send a target and
+        # Bridge startup may take longer than one ACT tick. Send a target and
         # establish the action clock only after BOTH ServoMoveStart acknowledgements.
         # First policy action is reissued below at tick zero (not skipped).
         launch_at = time.monotonic()
@@ -809,11 +829,26 @@ def main():
                 raise RuntimeError(f'ACT action {step+1} exceeds original 12-deg guard: '
                                    f'{max_lag_deg:.2f} deg')
             if max_lag_deg > args.max_target_lag_deg:
+                # Log the rejected action too. The original implementation only
+                # recorded successful actions, hiding the trigger in the CSV.
+                timing_rows.append({
+                    'step': step + 1,
+                    'chunk_index': step % chunk_len,
+                    'action_hz': args.action_hz,
+                    'active_time_s': round(time.monotonic()-started-paused_duration, 6),
+                    'tick_late_ms': round(late_ms, 3),
+                    'target_lag_deg': round(max_lag_deg, 4),
+                    'fr3_1_lag_deg': round(float(np.max(np.abs(q_delta_deg[:6]))), 4),
+                    'fr3_2_lag_deg': round(float(np.max(np.abs(q_delta_deg[6:]))), 4),
+                    'gripper_1_requested': int(gripper_requested['fr1']),
+                    'gripper_2_requested': int(gripper_requested['fr2']),
+                    'status': 'REJECTED_LAG',
+                })
                 raise RuntimeError(f'ACT timed action {step+1} outran robot: '
                                    f'{max_lag_deg:.2f} deg > '
                                    f'{args.max_target_lag_deg:.2f} deg. '
-                                   'Do not bypass this limit; lower --action-hz '
-                                   'or inspect ServoJ bridge speed/acceleration limits.')
+                                   'Do not bypass this limit; check the actual '
+                                   'trained action interval and ServoJ limits.')
 
             for a, pred in zip(('fr1', 'fr2'), gripper_action):
                 if pred >= 0.75:
@@ -886,6 +921,7 @@ def main():
                 'fr3_2_lag_deg': round(float(np.max(np.abs(q_delta_deg[6:]))), 4),
                 'gripper_1_requested': int(gripper_requested['fr1']),
                 'gripper_2_requested': int(gripper_requested['fr2']),
+                'status': 'SENT',
             })
             if step % 5 == 0 or changed:
                 print(f'[TIMED] step={step+1:03d} lag={max_lag_deg:.2f} deg '
