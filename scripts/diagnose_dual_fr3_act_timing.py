@@ -20,7 +20,7 @@ import rclpy
 import torch
 
 from test_dual_fr5_act import load_policy
-from test_dual_fr3_act_closed_loop_timed_skipaware import Observations, inference
+from test_dual_fr3_act_closed_loop_timed import Observations, inference
 
 
 def simulate_chunk(actions_deg, initial_deg, action_period, dt, speed_limit, accel_limit,
