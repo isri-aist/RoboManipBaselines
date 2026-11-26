@@ -100,7 +100,7 @@ def load_policy(checkpoint, device):
             f"Expected 14D state/action, got {state_dim}/{action_dim}"
         )
 
-    if camera_names != ["front", "hand"]:
+    if camera_names != ["front"]:
         raise ValueError(
             f"Unexpected camera mapping: {camera_names}"
         )
@@ -178,10 +178,10 @@ def prepare_images(info, meta, device):
 
         images.append(image)
 
-    if images[0].shape != images[1].shape:
-        raise ValueError(
-            "RMB expects both camera images to have the same dimensions"
-        )
+    # if images[0].shape != images[1].shape:
+    #     raise ValueError(
+    #         "RMB expects both camera images to have the same dimensions"
+    #     )
 
     # RMB image layout:
     # [batch, cameras, channels, height, width]

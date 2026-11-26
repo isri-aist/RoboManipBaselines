@@ -52,8 +52,7 @@ PREFIXES = {'fr1': '/fairino_1/act_servoj', 'fr2': '/fairino_2/act_servoj'}
 SOURCES = {
     'fr1': '/fairino_1/joint_states',
     'fr2': '/fairino_2/joint_states',
-    'front': '/camera_d405_1/color/image_rect_raw',
-    'hand': '/camera_d405_2/color/image_rect_raw',
+    'front': '/camera_d435i/color/image_raw',
 }
 
 
@@ -129,7 +128,7 @@ class Observations(Node):
             self.subscribers.append(self.create_subscription(
                 JointState, SOURCES[key], lambda msg, k=key: self._joint(k, msg), qos))
         # Register the front and hand RGB camera streams independently.
-        for key in ('front', 'hand'):
+        for key in ('front',):
             self.subscribers.append(self.create_subscription(
                 Image, SOURCES[key], lambda msg, k=key: self._image(k, msg), qos))
         # ServoJ bridge interface per arm: /target contains JointState positions
@@ -269,7 +268,6 @@ class Observations(Node):
         }
         info = {'rgb_images': {
             'front': self.data['front'].copy(),
-            'hand': self.data['hand'].copy(),
         }}
         return obs, info, dict(self.seq)
 
